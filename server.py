@@ -9,6 +9,7 @@ env (all optional, see README):
                             agent cannot fake a successful backup
   ALLOW_ANON_POST=1         accept POSTs without a key (only for a closed test network); a POST is refused when its key is unset
   BIND (127.0.0.1), PORT (8080)
+  STATE_FILE                optional path; keeps the last backup-upload report across restarts (the rest is in memory)
   PVE_URL, OPNSENSE_URL     sidebar links to the web UIs; a link only shows if its address is known
 """
 import gzip, hmac, json, os, re, ssl, time, urllib.request
@@ -42,6 +43,33 @@ upload = {}    # last report of the offsite-upload job, pushed by report_upload_
 hosthist = {}  # host name -> deque of {t, cpu, mem, disk} samples (about 4 hours at one report a minute)
 agents = {}    # name -> agent record
 events = deque(maxlen=100)  # agent status changes, newest last
+
+STATE_FILE = os.environ.get("STATE_FILE") or None
+
+
+def load_state():
+    """Restore the last upload report after a restart; a missing or damaged file just means "no report yet"."""
+    try:
+        with open(STATE_FILE) as f:
+            upload.update(json.load(f)["upload"])
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+
+
+def save_state():
+    """Write atomically with mode 600; a full or read-only disk must never break the POST that triggered it."""
+    if not STATE_FILE:
+        return
+    try:
+        tmp = STATE_FILE + ".tmp"
+        with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+            json.dump({"upload": upload}, f)
+        os.replace(tmp, STATE_FILE)
+    except OSError as e:
+        print("could not save state:", e)
+
+
+load_state()
 
 # Proxmox usually ships a self-signed certificate. Verification is on by default; PVE_TLS_VERIFY=0 turns it off
 # (only do that on a trusted LAN), PVE_CA_FILE makes the proper fix: trust the cluster's own CA.
@@ -524,6 +552,7 @@ class H(BaseHTTPRequestHandler):
                                "finished": int(d.get("finished") or now), "files": int(d.get("files") or 0),
                                "bytes": int(d.get("bytes") or 0), "error": str(d.get("error", ""))[:300],
                                "log": [str(l)[:300] for l in (d.get("log") or [])[:20]]})
+                save_state()
                 return self._json({"ok": True})
             name = str(d["name"])[:64]
         except Exception:

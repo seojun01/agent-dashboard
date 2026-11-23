@@ -5,7 +5,7 @@ from http.server import ThreadingHTTPServer
 
 def start(**env):
     """Import a fresh copy of server.py with the given environment and serve it on a free loopback port."""
-    for k in ("AGENT_KEY", "BACKUP_KEY", "ALLOW_ANON_POST", "PVE_HOST", "PVE_TOKEN", "BIND", "PVE_TLS_VERIFY"):
+    for k in ("AGENT_KEY", "BACKUP_KEY", "STATE_FILE", "ALLOW_ANON_POST", "PVE_HOST", "PVE_TOKEN", "BIND", "PVE_TLS_VERIFY"):
         os.environ.pop(k, None)
     os.environ.update(env)
     import server
@@ -85,6 +85,23 @@ class Access(unittest.TestCase):
         page = urllib.request.urlopen(urllib.request.Request(base + "/", headers={"Accept-Encoding": "gzip"}), timeout=5)
         self.assertEqual(page.headers.get("Content-Encoding"), "gzip")
         self.assertIn(b"<title>", gzip.decompress(page.read()))
+        stop(h)
+
+    def test_upload_report_survives_a_restart(self):
+        import tempfile
+        path = os.path.join(tempfile.mkdtemp(), "state.json")
+        _, h, base = start(BACKUP_KEY="b", STATE_FILE=path)
+        self.assertEqual(call(base + "/api/backup", {"status": "ok", "files": 3}, key="b")[0], 200)
+        stop(h)
+        self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")  # the state file is private
+        _, h, base = start(BACKUP_KEY="b", STATE_FILE=path)            # a fresh import is a restart: it loads the file
+        up = call(base + "/api/backups")[2]["upload"]
+        self.assertEqual((up["status"], up["files"]), ("ok", 3))
+        stop(h)
+        with open(path, "w") as f:
+            f.write("{broken")                                          # a damaged file must not stop the server
+        _, h, base = start(BACKUP_KEY="b", STATE_FILE=path)
+        self.assertIsNone(call(base + "/api/backups")[2]["upload"])
         stop(h)
 
     def test_anonymous_post_only_when_explicitly_allowed(self):

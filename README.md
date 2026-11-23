@@ -43,6 +43,7 @@ Notes on the token: a privilege-separated token only gets what both the user and
 | `AGENT_KEY` | Secret that agents and machine reporters send (`/api/agent`, `/api/vms`). **Required** for those POSTs |
 | `BACKUP_KEY` | A *different* secret, known only to the backup-upload job (`/api/backup`). **Required** for that POST. Keeping it apart means a hijacked agent cannot report a fake "upload ok" |
 | `ALLOW_ANON_POST=1` | Accept POSTs without a key. Only for a closed test network |
+| `STATE_FILE` | Optional path (mode 600). Keeps the last backup-upload report across restarts; everything else lives in memory and is rebuilt as agents report again |
 | `BIND` / `PORT` | Listen address (default `127.0.0.1`) and port (default `8080`) |
 | `PVE_URL`, `OPNSENSE_URL` | Sidebar links to the web UIs. A link shows only when its address is known |
 
@@ -70,6 +71,7 @@ After=network-online.target
 [Service]
 User=dashboard
 EnvironmentFile=/etc/agent-dashboard.env   # mode 600, see .env.example
+StateDirectory=agent-dashboard             # /var/lib/agent-dashboard, writable for STATE_FILE even with ProtectSystem=strict
 ExecStart=/usr/bin/python3 /opt/agent-dashboard/server.py
 Restart=on-failure
 NoNewPrivileges=true
