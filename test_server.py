@@ -104,6 +104,17 @@ class Access(unittest.TestCase):
         self.assertIsNone(call(base + "/api/backups")[2]["upload"])
         stop(h)
 
+    def test_agents_remember_when_they_last_worked(self):
+        _, h, base = start(AGENT_KEY="k")
+        call(base + "/api/agent", {"name": "a", "status": "working"}, key="k")
+        call(base + "/api/agent", {"name": "a", "status": "idle"}, key="k")   # worked, then went idle
+        call(base + "/api/agent", {"name": "b", "status": "idle"}, key="k")   # never worked
+        agents = {x["name"]: x for x in call(base + "/api/status")[2]["agents"]}
+        self.assertEqual(agents["a"]["status"], "idle")
+        self.assertLess(agents["a"]["work_age"], 5)
+        self.assertIsNone(agents["b"]["work_age"])
+        stop(h)
+
     def test_anonymous_post_only_when_explicitly_allowed(self):
         _, h, base = start(ALLOW_ANON_POST="1")
         self.assertEqual(call(base + "/api/agent", {"name": "a"})[0], 200)

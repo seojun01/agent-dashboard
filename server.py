@@ -460,6 +460,7 @@ def status():
     ag = [{"name": a["name"], "host": a["host"], "task": a["task"], "beats": a["beats"],
            "status": "offline" if a["dark"] else a["status"],
            "age": int(now - a["seen"]), "since_age": int(now - a["since"]),
+           "work_age": int(now - a["last_work"]) if a.get("last_work") else None,  # seconds since it last worked
            "timeline": timeline(a["name"], now)} for a in agents.values()]
     ev = [{**e, "age": int(now - e["t"])} for e in sorted(events, key=lambda e: -e["t"])[:40]]
     hv = [{**h, "age": int(now - h["seen"]), "hist": list(hosthist.get(h["host"], []))} for h in hostvms.values()]
@@ -563,7 +564,8 @@ class H(BaseHTTPRequestHandler):
             events.append({"t": now, "name": name, "host": host, "status": st, "task": task})
         changed = not a or a["status"] != st or a["dark"]
         agents[name] = {"name": name, "host": host, "status": st, "task": task, "seen": now, "dark": False,
-                        "since": now if changed else a["since"], "beats": (a["beats"] if a else 0) + 1}
+                        "since": now if changed else a["since"], "beats": (a["beats"] if a else 0) + 1,
+                        "last_work": now if st == "working" else (a or {}).get("last_work")}  # when it last reported "working"
         self._json({"ok": True})
 
     def log_message(self, *a):

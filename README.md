@@ -5,7 +5,7 @@ A small dashboard for a home lab: the state of your **Proxmox** VMs and containe
 - **Overview**: host CPU/memory/disk, usage charts, VMs, agents, storage, latest backups and tasks
 - **Node and VM/CT pages** in the layout of the Proxmox web UI: status panel, area charts (hour/day/week/month, average/maximum), hardware, snapshots, tasks
 - **Backups**: running progress, last result per guest, history, archives, and whether your offsite upload keeps running
-- **Agents**: status, current task, a 6-hour status strip, recent activity
+- **Agents**: only agents that are working, or worked in the last 30 minutes (most recent first, at most 5); idle and offline ones stay behind a "Show more" line. Status, current task, a 6-hour status strip, recent activity
 - Light and dark theme, no external requests, no build step
 
 ## Quick start

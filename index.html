@@ -57,6 +57,8 @@ td.grp{background:var(--bg);color:var(--mut);font-size:12px;font-weight:600;padd
 .who{display:flex;align-items:center;gap:10px}
 .av{width:30px;height:30px;border-radius:50%;background:var(--idbg);color:var(--mut);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
 .empty{padding:20px 16px;color:var(--mut)}
+.more{display:block;width:100%;padding:10px 16px;background:none;border:0;border-top:1px solid var(--line);color:var(--acc);font:13px var(--sans);text-align:left;cursor:pointer}
+.more:hover{background:var(--bg)}.more:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.tile{padding:14px 16px}.tile .n{font-size:26px;font-weight:600}.tile .l{color:var(--mut);font-size:13px}
 .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:-1px 0 0}
 .kv>div{border-top:1px solid var(--line);padding:10px 16px}.kv dt{color:var(--mut);font-size:12px}.kv dd{margin:2px 0 0;word-break:break-word}
@@ -201,10 +203,11 @@ function fake(){return{links:[{name:'Proxmox',url:'#'},{name:'OPNsense',url:'#'}
  {type:'qemu',vmid:104,name:'build-runner',node:'pve',status:'stopped',maxcpu:2,maxdisk:64e9}]},
  hostvms:[{host:'My Mac',age:20,items:[],
   stats:{cpu:.15,mem_used:17e9,mem_total:25.7e9,disk_used:291e9,disk_total:494e9,uptime:86400*3}}],
- agents:[{name:'news-agent',host:'Homeserver',status:'working',task:'Morning briefing',age:12,since_age:340,beats:420},
- {name:'mac-agent',host:'My Mac',status:'working',task:'Building the dashboard',age:40,since_age:1900,beats:1210},
- {name:'mail-sorter',host:'Homeserver',status:'idle',task:'',age:210,since_age:4000,beats:96},
- {name:'scraper-bot',host:'My Mac',status:'offline',task:'Last: collecting prices',age:5400,since_age:5100,beats:57}],
+ agents:[{name:'news-agent',host:'Homeserver',status:'working',task:'Morning briefing',age:12,since_age:340,beats:420,work_age:0},
+ {name:'mac-agent',host:'My Mac',status:'working',task:'Building the dashboard',age:40,since_age:1900,beats:1210,work_age:0},
+ {name:'mail-sorter',host:'Homeserver',status:'idle',task:'',age:210,since_age:4000,beats:96,work_age:420},
+ {name:'scraper-bot',host:'My Mac',status:'offline',task:'Last: collecting prices',age:5400,since_age:5100,beats:57,work_age:5100},
+ {name:'gateway',host:'Homeserver',status:'idle',task:'Gateway running',age:20,since_age:9000,beats:900,work_age:null}],
  events:[{age:12,name:'news-agent',host:'Homeserver',status:'working',task:'Morning briefing'},{age:40,name:'mac-agent',host:'My Mac',status:'working',task:'Building the dashboard'},
  {age:210,name:'mail-sorter',host:'Homeserver',status:'idle',task:''},{age:1800,name:'news-agent',host:'Homeserver',status:'idle',task:''},
  {age:5100,name:'scraper-bot',host:'My Mac',status:'offline',task:'Last: collecting prices'},{age:5400,name:'scraper-bot',host:'My Mac',status:'working',task:'Last: collecting prices'}]}}
@@ -351,6 +354,10 @@ const mini=p=>`<span class="mini"><i style="width:${Math.min(100,pct(p))}%"></i>
 const barx=p=>`<div class="bar"><i style="width:${Math.min(100,pct(p))}%"></i></div>`;
 const AG={working:['ok','Active'],idle:['','Idle'],offline:['bad','Offline']};
 const card=(l,v,s,x='')=>`<div class="card stat"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}${x}</div>`;
+// An agent is listed while it works and for 30 minutes after, most recent first, at most 5; the rest sit behind "Show more".
+const RECENT=30*60,MAX_SHOWN=5;let showAllAgents=false;
+const isActive=x=>x.status==='working'||(x.work_age!=null&&x.work_age<RECENT);
+const byRecent=(p,q)=>((q.status==='working')-(p.status==='working'))||((p.work_age??1e9)-(q.work_age??1e9))||p.name.localeCompare(q.name);
 const byHost=a=>[...a].sort((p,q)=>(p.host||'~').localeCompare(q.host||'~')||p.name.localeCompare(q.name));
 const hostOf=v=>v==='hs-agents'?'homeserver':v==='mac-agents'?'my-mac':null;  // agent tabs show one host's agents
 const size=b=>b>=2**30?(b/2**30).toFixed(2)+' GiB':(b/2**20).toFixed(2)+' MiB';
@@ -482,12 +489,16 @@ function renderMac(){
 function renderAgents(all){
   const hs=hostOf(view),av=all.filter(x=>!hs||slug(x.host)===hs),n=s=>av.filter(x=>x.status===s).length;
   $('agsum').innerHTML=[['Active','working'],['Idle','idle'],['Offline','offline']].map(([l,s])=>`<div class="card tile"><div class="n">${n(s)}</div><div class="l">${l}</div></div>`).join('');
-  $('agents').innerHTML=av.length?`<table><thead><tr><th>Agent</th><th>Status</th><th>In this status</th><th>Last 6 hours</th><th>Last seen</th><th>Heartbeats</th></tr></thead><tbody>${byHost(av).map((x,i,arr)=>{const s=AG[x.status]||['',esc(x.status)];
-    return(!hs&&(!i||arr[i-1].host!==x.host)?`<tr><td colspan="6" class="grp">${esc(x.host||'Unspecified')}</td></tr>`:'')+`<tr>
-    <td><div class="who"><span class="av">${esc(x.name[0]?.toUpperCase())}</span><div><b>${esc(x.name)}</b><div class="mut">${esc(x.task)||'No task'}</div></div></div></td>
-    <td>${badge(s[0],s[1])}</td><td class="mono mut">${dur(x.since_age||0)}</td><td>${strip(x)}</td><td class="mono mut">${ago(x.age)}</td><td class="mono mut">${x.beats??'-'}</td></tr>`}).join('')}</tbody></table>`
-    :'<div class="empty">No agents yet. An agent appears here after its first POST to /api/agent.</div>';
-  const ev=(data.events||[]).filter(e=>!hs||slug(e.host)===hs);
+  const rows=(showAllAgents?[...av].sort(byRecent):av.filter(isActive).sort(byRecent).slice(0,MAX_SHOWN)),hidden=av.length-rows.length;
+  const more=showAllAgents?(av.length>0?'<button class="more" id="agmore">Show only agents that worked recently</button>':''):(hidden>0?`<button class="more" id="agmore">Show ${hidden} more (idle or offline for over 30 min)</button>`:'');
+  $('agents').innerHTML=(rows.length?`<table><thead><tr><th>Agent</th><th>Status</th><th>In this status</th><th>Last 6 hours</th><th>Last worked</th><th>Last seen</th></tr></thead><tbody>${rows.map(x=>{const s=AG[x.status]||['',esc(x.status)];
+    return`<tr>
+    <td><div class="who"><span class="av">${esc(x.name[0]?.toUpperCase())}</span><div><b>${esc(x.name)}</b><div class="mut">${hs?'':esc(x.host||'Unspecified')+' · '}${esc(x.task)||'No task'}</div></div></div></td>
+    <td>${badge(s[0],s[1])}</td><td class="mono mut">${dur(x.since_age||0)}</td><td>${strip(x)}</td><td class="mono mut">${x.status==='working'?'now':x.work_age!=null?ago(x.work_age):'never'}</td><td class="mono mut">${ago(x.age)}</td></tr>`}).join('')}</tbody></table>`
+    :av.length?`<div class="empty">No agent has worked in the last 30 minutes.</div>`:'<div class="empty">No agents yet. An agent appears here after its first POST to /api/agent.</div>')+more;
+  const mb=$('agmore');if(mb)mb.onclick=()=>{showAllAgents=!showAllAgents;renderAgents(data.agents)};
+  const names=new Set(rows.map(x=>x.name));
+  const ev=(data.events||[]).filter(e=>(!hs||slug(e.host)===hs)&&(showAllAgents||names.has(e.name)));
   $('events').innerHTML=ev.length?`<ul class="feed">${ev.map(e=>{const s=AG[e.status]||['',esc(e.status)];
     return`<li><span class="t mono mut">${ago(e.age)}</span><b>${esc(e.name)}</b>${badge(s[0],s[1])}<span class="mut">${esc(e.task)}</span></li>`}).join('')}</ul>`:'<div class="empty">No activity recorded since the server started.</div>';
 }
