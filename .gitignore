@@ -1,0 +1,9 @@
+# secrets and local config: never commit these
+.env
+*.env
+!.env.example
+# python / macOS
+__pycache__/
+*.pyc
+.DS_Store
+._*

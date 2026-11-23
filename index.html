@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Homelab Dashboard</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--line:#e3e6ea;--tx:#1f2933;--mut:#6b7785;--acc:#2563eb;--ok:#16a34a;--bad:#dc2626;--okbg:#dcfce7;--badbg:#fee2e2;--idbg:#eceff3;
+--s1:#2a78d6;--s2:#eb6834;
+--sans:-apple-system,"Segoe UI",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c22;--line:#272e36;--tx:#e6e9ed;--mut:#8a95a1;--acc:#6ea0ff;--ok:#4ade80;--bad:#f87171;--okbg:#12301f;--badbg:#3a1717;--idbg:#222930;--s1:#3987e5;--s2:#d95926}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+/* big screens: scale the whole UI up instead of leaving empty margins (--z is the zoom factor) */
+:root{--z:1}
+@media(min-width:1700px){:root{--z:1.2}}
+@media(min-width:2100px){:root{--z:1.45}}
+@media(min-width:2600px){:root{--z:1.8}}
+body{zoom:var(--z);margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 var(--sans)}
+.shell{display:flex;min-height:calc(100vh / var(--z))}.content{flex:1;min-width:0}
+aside{width:230px;flex:none;background:var(--card);border-right:1px solid var(--line);padding:16px 0;position:sticky;top:0;height:calc(100vh / var(--z));overflow-y:auto}
+.brand{font-weight:600;font-size:17px;padding:0 20px 14px}
+aside nav a{display:flex;align-items:center;gap:8px;color:var(--tx);text-decoration:none;padding:7px 20px}
+aside nav a:hover{background:var(--bg)}aside nav a:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+aside nav a[aria-current=page]{background:var(--bg);font-weight:600;box-shadow:inset 3px 0 var(--tx)}
+aside nav a.t1{padding-left:38px;font-size:13px}
+aside nav a.ext{color:var(--acc)}aside nav a.ext::after{content:" \2197"}
+.sg{color:var(--mut);font-size:12px;font-weight:600;padding:16px 20px 4px}
+.sd{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--mut);flex:none}.sd.on{background:var(--ok);border-color:var(--ok)}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:16px}
+header h1{font-size:17px;margin:0;font-weight:600}.upd{color:var(--mut);font-size:12px}
+main{padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+.err{background:var(--badbg);color:var(--bad);border-radius:6px;padding:10px 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px}
+.card h2{margin:0;padding:12px 16px;font-size:14px;font-weight:600;border-bottom:1px solid var(--line)}
+.card h2 .mut{font-weight:400}
+/* summary cards always stay on one row; text shrinks with the window instead of wrapping */
+.stats{display:grid;grid-template-columns:repeat(var(--n,6),minmax(0,1fr));gap:clamp(6px,1vw,16px)}#bk-tiles{--n:5}
+.stat{padding:clamp(8px,1vw,14px) clamp(8px,1.1vw,16px);min-width:0}
+.stat .l,.stat .s{color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .l{font-size:clamp(11px,.9vw,13px)}.stat .s{font-size:clamp(10px,.8vw,12px)}
+.stat .v{font-size:clamp(16px,1.8vw,26px);font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{height:6px;background:var(--idbg);border-radius:3px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--s1)}
+svg.sp{width:100%;height:26px;margin-top:6px;display:block}
+.cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,4fr);gap:16px;align-items:start}.cols.single{grid-template-columns:1fr}
+#agents th,#agents td{padding-left:12px;padding-right:12px}
+#leftcol,#rightcol,#machost,#hostvms{display:flex;flex-direction:column;gap:16px;min-width:0}
+#rightcol.agview{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);align-items:start}#rightcol.agview #agsum{grid-column:1/-1}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-weight:500;color:var(--mut);font-size:12px;padding:8px 16px;white-space:nowrap}
+td{padding:10px 16px;border-top:1px solid var(--line);vertical-align:middle}
+tr[data-vm]{cursor:pointer}tr[data-vm]:hover{background:var(--bg)}tr[data-vm]:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+td.grp{background:var(--bg);color:var(--mut);font-size:12px;font-weight:600;padding:6px 16px}
+.mono{font-family:var(--mono);font-size:12.5px}.mut{color:var(--mut)}
+.badge{display:inline-block;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:500;background:var(--idbg);color:var(--mut)}
+.badge.ok{background:var(--okbg);color:var(--ok)}.badge.bad{background:var(--badbg);color:var(--bad)}
+.mini{display:inline-block;width:70px;height:6px;background:var(--idbg);border-radius:3px;overflow:hidden;vertical-align:middle;margin-right:8px}.mini i{display:block;height:100%;background:var(--s1)}
+.who{display:flex;align-items:center;gap:10px}
+.av{width:30px;height:30px;border-radius:50%;background:var(--idbg);color:var(--mut);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
+.empty{padding:20px 16px;color:var(--mut)}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.tile{padding:14px 16px}.tile .n{font-size:26px;font-weight:600}.tile .l{color:var(--mut);font-size:13px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:-1px 0 0}
+.kv>div{border-top:1px solid var(--line);padding:10px 16px}.kv dt{color:var(--mut);font-size:12px}.kv dd{margin:2px 0 0;word-break:break-word}
+.feed{list-style:none;margin:0;padding:0;max-height:560px;overflow-y:auto}
+.feed li{display:flex;gap:10px;align-items:baseline;padding:9px 16px;border-top:1px solid var(--line);flex-wrap:wrap}.feed li:first-child{border-top:0}
+.feed .t{width:64px;flex:none}
+/* Proxmox-style summary: status panel + wide area charts on a 6-column grid */
+#summary{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;align-items:stretch}
+#suminfo{grid-column:span 2}#sumcharts{display:contents}
+.sumlist{padding:6px 0}.sr{padding:7px 16px}.sl{display:flex;justify-content:space-between;gap:12px}.sl>span:first-child{color:var(--mut)}.sl .mono{text-align:right}
+/* time range + aggregation, as in the Proxmox web UI */
+.filters{display:flex;gap:10px;justify-content:flex-end;align-items:center}
+.filters select,.seg button{background:var(--card);color:var(--tx);border:1px solid var(--line);padding:6px 12px;font:13px var(--sans);cursor:pointer}
+.filters select{border-radius:6px;min-width:130px}
+.seg{display:inline-flex}.seg button:first-child{border-radius:6px 0 0 6px}.seg button:last-child{border-radius:0 6px 6px 0;border-left:0}
+.seg button[aria-pressed=true]{background:var(--bg);font-weight:600;box-shadow:inset 0 -2px var(--s1)}
+.filters :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+/* charts: categorical slots 1-2 of the validated default palette */
+.charts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;transition:opacity .2s}.busy{opacity:.5}
+.cbox{position:relative;padding:4px 12px 10px}.cbox svg{width:100%;height:auto;display:block;touch-action:pan-y}
+.gl{stroke:var(--line);stroke-width:1}.ax{fill:var(--mut);font:11px var(--sans)}
+.leg{display:flex;gap:14px;padding:8px 16px 0;font-size:12px;color:var(--mut)}
+.key{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:6px}
+.tip{position:absolute;top:6px;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:12px;white-space:nowrap;box-shadow:0 2px 8px #0003;z-index:2}
+.tip b{font-size:13px}.tip .t{color:var(--mut);margin-bottom:2px}
+details.tbl summary{cursor:pointer;color:var(--mut);font-size:13px;padding:4px 0}details.tbl .card{margin-top:8px}
+.scroll{overflow-x:auto}
+#backups-view{display:flex;flex-direction:column;gap:16px}
+.row2{display:grid;grid-template-columns:2fr 3fr;gap:16px;align-items:start}
+.card h2 a{font-weight:400;font-size:12px;margin-left:6px}
+pre.log{margin:0;padding:10px 16px;border-top:1px solid var(--line);font:12px/1.5 var(--mono);color:var(--mut);white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+.warn{padding:10px 16px;background:var(--badbg);color:var(--bad);font-weight:500}
+.runrow{padding:12px 16px}.runrow+.runrow{border-top:1px solid var(--line)}
+@media(max-width:900px){.row2{grid-template-columns:1fr}}
+#extra{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,620px),1fr));gap:16px;align-items:start}
+#storage td:nth-child(4){white-space:nowrap}
+.sub{padding:12px 16px 4px;color:var(--mut);font-size:12px;font-weight:600}
+.note{padding:10px 16px;color:var(--mut);border-top:1px solid var(--line);white-space:pre-wrap}
+.tl{position:relative;width:120px;height:10px;background:var(--idbg);border-radius:3px;overflow:hidden}
+.tl i{position:absolute;top:0;bottom:0}.tl i.working{background:var(--ok)}.tl i.idle{background:var(--mut);opacity:.6}.tl i.offline{background:var(--bad)}
+@media(max-width:1250px){.charts{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.cols,#rightcol.agview{grid-template-columns:1fr}header,main{padding-left:14px;padding-right:14px}.scroll{overflow-x:auto}
+.charts{grid-template-columns:1fr}#summary{grid-template-columns:1fr}#summary>*{grid-column:1/-1!important}
+.shell{flex-direction:column}aside{width:auto;height:auto;position:static;border-right:0;border-bottom:1px solid var(--line);padding:10px 0}aside nav{display:flex;flex-wrap:wrap;align-items:center}.sg{padding:6px 14px}aside nav a,aside nav a.t1{padding:6px 14px}.tiles{grid-template-columns:1fr}.filters{justify-content:flex-start}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside>
+  <div class="brand">Homelab</div>
+  <nav aria-label="Sections">
+    <a href="#overview">Overview</a>
+    <div class="sg">Homeserver</div>
+    <span id="tree"></span>
+    <a href="#backups">Backups</a>
+    <a href="#hs-agents">Agents</a>
+    <span id="ext"></span>
+    <div class="sg">My Mac</div>
+    <a href="#mac-vms">VMs (UTM)</a>
+    <a href="#mac-agents">Agents</a>
+  </nav>
+</aside>
+<div class="content">
+<header>
+  <h1 id="title">Overview</h1>
+  <span class="upd" id="upd"></span>
+</header>
+<main>
+  <div class="err" id="err" hidden></div>
+  <section class="stats" id="stats"></section>
+  <div class="filters" id="range">
+    <select id="tfsel" aria-label="Time range"><option value="hour">Hour</option><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select>
+    <span class="seg" role="group" aria-label="Aggregation"><button data-cf="MAX" aria-pressed="false">Maximum</button><button data-cf="AVERAGE" aria-pressed="true">Average</button></span>
+  </div>
+  <section id="usage" aria-label="Host usage">
+    <div class="charts" id="charts"></div>
+    <details class="tbl"><summary>View as table</summary><div class="card scroll" id="gtable"></div></details>
+  </section>
+  <section id="summary" aria-label="Summary">
+    <div class="card" id="suminfo"></div>
+    <div id="sumcharts"></div>
+  </section>
+  <div class="cols" id="cols">
+    <div id="leftcol">
+      <section class="card" id="vms-card"><h2>Homeserver VMs and containers <span class="mut" id="vmhint"></span></h2><div class="scroll" id="vms"></div></section>
+      <div id="machost"></div>
+      <div id="machart" class="charts" style="grid-template-columns:repeat(2,1fr)"></div>
+      <div id="hostvms"></div>
+    </div>
+    <div id="rightcol">
+      <section class="tiles" id="agsum"></section>
+      <section class="card" id="agents-card"><h2>Agents</h2><div class="scroll" id="agents"></div></section>
+      <section class="card" id="events-card"><h2>Recent activity</h2><div id="events"></div></section>
+    </div>
+  </div>
+  <div id="extra">
+    <section class="card" id="storage-card"><h2>Storage</h2><div class="scroll" id="storage"></div></section>
+    <section class="card" id="net-card"><h2>Network interfaces</h2><div class="scroll" id="net"></div></section>
+    <section class="card" id="disks-card"><h2>Physical disks</h2><div class="scroll" id="disks"></div></section>
+    <section class="card" id="conf-card"><h2>Hardware</h2><div class="scroll" id="conf"></div></section>
+    <section class="card" id="snap-card"><h2>Snapshots</h2><div class="scroll" id="snaps"></div></section>
+    <section class="card" id="bk-mini"><h2>Backups <a href="#backups" class="mut">details</a></h2><div class="scroll" id="bkmini"></div></section>
+  </div>
+  <section id="backups-view">
+    <div class="stats" id="bk-tiles"></div>
+    <section class="card" id="bk-running" hidden><h2>Running now</h2><div id="bk-run"></div></section>
+    <section class="card"><h2>Guests <span class="mut">· last backup of each VM/CT</span></h2><div class="scroll" id="bk-guests"></div></section>
+    <div class="row2">
+      <section class="card"><h2>Offsite upload</h2><div id="bk-upload"></div></section>
+      <section class="card"><h2>History <span class="mut">· recent backup tasks</span></h2><div class="scroll" id="bk-history"></div></section>
+    </div>
+    <section class="card"><h2>Archives on storage <span class="mut" id="bk-fhint"></span></h2><div class="scroll" id="bk-files"></div></section>
+  </section>
+  <section class="card" id="tasks-card"><h2>Tasks <span class="mut" id="taskhint"></span></h2><div class="scroll" id="tasks"></div></section>
+</main>
+</div></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dur=s=>s<60?s+'s':s<3600?Math.floor(s/60)+'m':s<86400?Math.floor(s/3600)+'h':Math.floor(s/86400)+'d';
+const ago=s=>dur(s)+' ago';
+const gb=b=>(b/2**30).toFixed(1);
+const fmtB=b=>b>=2**30?(b/2**30).toFixed(1)+' GiB':b>=2**20?Math.round(b/2**20)+' MiB':Math.round(b/1024)+' KiB';
+const pct=x=>Math.round((x||0)*100);
+const slug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-');  // "My Mac" -> my-mac
+const isOn=v=>v.status==='running'||v.type==='node';
+const vkey=v=>v.type+'/'+v.vmid;
+const hist=[];let data={vms:{items:[]},agents:[],links:[],events:[],hostvms:[],host:null};
+let tf='hour',cf='AVERAGE',view='overview',selVm='',vinfo=null,tasks=[],terr='',ndetail=null,vdetail=null,macSig='',bk=null;
+
+// ---------- demo data: open /?demo to preview without Proxmox ----------
+const demo=new URLSearchParams(location.search).has('demo');
+const rnd=()=>Math.random();
+function fake(){return{links:[{name:'Proxmox',url:'#'},{name:'OPNsense',url:'#'}],
+ host:{node:'pve',pve:'pve-manager/9.2.26',kernel:'6.14.11-4-pve',cpu_model:'Intel(R) N100',cores:4,sockets:1,uptime:9e6,load:['0.32','0.40','0.38'],
+  rootfs:{used:21e9,total:98e9},swap:{used:2e8,total:8e9},mem:{used:11e9,total:16e9}},
+ vms:{items:[
+ {type:'node',name:'pve',node:'pve',status:'online',cpu:.2+rnd()*.2,mem:11e9,maxmem:16e9,uptime:9e6,maxcpu:4},
+ {type:'qemu',vmid:100,name:'ubuntu-server',node:'pve',status:'running',cpu:rnd()*.1,mem:2e9,maxmem:4*2**30,uptime:86400*30,maxcpu:2,maxdisk:32e9,netin:4.1e10,netout:6e9},
+ {type:'lxc',vmid:102,name:'CT102',node:'pve',status:'running',cpu:.0004,mem:185.9*2**20,maxmem:512*2**20,uptime:86400*5+6900,maxcpu:1,disk:1.53*2**30,maxdisk:3.86*2**30,netin:9e9,netout:3e9},
+ {type:'qemu',vmid:101,name:'homeassistant',node:'pve',status:'running',cpu:rnd()*.1,mem:2e9,maxmem:4*2**30,uptime:86400*40,maxcpu:2,maxdisk:32e9,netin:2e9,netout:8e8},
+ {type:'qemu',vmid:103,name:'agent-vm',node:'pve',status:'running',cpu:.3+rnd()*.3,mem:3e9,maxmem:3.5*2**30,uptime:7200,maxcpu:2,maxdisk:32e9,netin:1e9,netout:4e8},
+ {type:'qemu',vmid:104,name:'build-runner',node:'pve',status:'stopped',maxcpu:2,maxdisk:64e9}]},
+ hostvms:[{host:'My Mac',age:20,items:[{name:'Windows',status:'stopped'},{name:'Ubuntu Dev',status:'started'}],
+  stats:{cpu:.15,mem_used:17e9,mem_total:25.7e9,disk_used:291e9,disk_total:494e9,uptime:86400*3}}],
+ agents:[{name:'news-agent',host:'Homeserver',status:'working',task:'Morning briefing',age:12,since_age:340,beats:420},
+ {name:'mac-agent',host:'My Mac',status:'working',task:'Building the dashboard',age:40,since_age:1900,beats:1210},
+ {name:'mail-sorter',host:'Homeserver',status:'idle',task:'',age:210,since_age:4000,beats:96},
+ {name:'scraper-bot',host:'My Mac',status:'offline',task:'Last: collecting prices',age:5400,since_age:5100,beats:57}],
+ events:[{age:12,name:'news-agent',host:'Homeserver',status:'working',task:'Morning briefing'},{age:40,name:'mac-agent',host:'My Mac',status:'working',task:'Building the dashboard'},
+ {age:210,name:'mail-sorter',host:'Homeserver',status:'idle',task:''},{age:1800,name:'news-agent',host:'Homeserver',status:'idle',task:''},
+ {age:5100,name:'scraper-bot',host:'My Mac',status:'offline',task:'Last: collecting prices'},{age:5400,name:'scraper-bot',host:'My Mac',status:'working',task:'Last: collecting prices'}]}}
+function fakePts(total){const n={hour:60,day:96,week:84,month:90}[tf],step={hour:60,day:900,week:7200,month:28800}[tf],now=Math.floor(Date.now()/1000);
+  return Array.from({length:n},(_,i)=>{const m=.4+.1*Math.sin(i/15);return{t:now-(n-1-i)*step,cpu:Math.max(.02,.25+.15*Math.sin(i/6)+rnd()*.08),iowait:rnd()*.03,mem:m,memb:m*total,memtotal:total,
+   load:.3+.2*Math.sin(i/7)**2+rnd()*.1,swap:.03+.01*Math.sin(i/20),disk:.22,
+   netin:2e5+1.5e5*Math.sin(i/5)**2*rnd()*3,netout:6e4+5e4*rnd(),diskr:1e5*rnd()*3,diskw:2e5*rnd()*2}})}
+const fakeTasks=()=>{const n=Math.floor(Date.now()/1000);return[
+ ['VM/CT 102 - Console',60,2,'OK'],['Update package database',52000,4,'OK'],['VM/CT 102 - Backup',56000,21,'OK'],['VM/CT 103 - Backup',57000,41,'OK'],
+ ['VM/CT 100 - Backup',57100,20,'OK'],['VM/CT 101 - Start',90000,12,'OK'],['VM/CT 104 - Shutdown',99000,3,'unable to stop: timeout']].map(([desc,a,d,st])=>({desc,start:n-a,end:n-a+d,node:'pve',user:'root@pam',status:st}))};
+
+// demo-only extras: storage, per-agent timelines, Mac history, node and VM details
+function fakeExtras(d){
+  const now=Math.floor(Date.now()/1000);
+  d.vms.storage=[{name:'local',node:'pve',status:'available',used:12e9,total:94e9,type:'dir',content:'iso,vztmpl,backup'},
+    {name:'local-lvm',node:'pve',status:'available',used:85e9,total:350e9,type:'lvmthin',content:'rootdir,images'},
+    {name:'backup-pbs',node:'pve',status:'available',used:40e9,total:100e9,type:'pbs',content:'backup',shared:1}];
+  d.hostvms[0].hist=Array.from({length:60},(_,i)=>({t:now-(59-i)*60,cpu:.15+.1*Math.sin(i/8),mem:.66+.02*Math.sin(i/12),disk:.59}));
+  const TL={working:[[20000,17000,'working'],[17000,9000,'idle'],[9000,0,'working']],idle:[[21600,12000,'working'],[12000,0,'idle']],offline:[[21600,15000,'working'],[15000,0,'offline']]};
+  d.agents.forEach(a=>a.timeline=TL[a.status]);
+  return d}
+function fakeBackups(){
+  const n=Math.floor(Date.now()/1000),H=3600,D=86400;
+  const G=[[100,'ubuntu-server','qemu','04:00',0,'4.31GB',30.2e9,95],[103,'agent-vm','qemu','04:15',900,'2.90GB',19e9,70],[102,'CT102','lxc','04:30',1800,'0.92GB',6.1e9,25]];
+  const guests=G.map(([vmid,name,type,schedule,off,size,total,dur])=>({vmid,name,type,schedule,enabled:true,prune:'keep-last=7',next_run:n+20*H+off,
+    last:{start:n-4*H+off,end:n-4*H+off+dur,status:'OK'},last_size:size,copies:7,total}))
+    .concat([{vmid:101,name:'homeassistant',type:'qemu',schedule:'',enabled:false,prune:'',next_run:null,last:null,last_size:null,copies:1,total:1.8e9}]);
+  const history=[0,1,2,3].flatMap(d=>G.map(([vmid,,,,off,,,dur])=>({vmid:String(vmid),start:n-4*H-d*D+off,end:n-4*H-d*D+off+dur,status:d===2&&vmid===103?'unable to connect: timeout':'OK'})));
+  history.sort((a,b)=>b.start-a.start);
+  const files=history.filter(h=>h.status==='OK').map(h=>({volid:`local:backup/vzdump-${h.vmid==='102'?'lxc':'qemu'}-${h.vmid}-${new Date(h.start*1000).toISOString().slice(0,10).replace(/-/g,'_')}-04_00_00.${h.vmid==='102'?'tar':'vma'}.zst`,
+    storage:'local',vmid:h.vmid,size:{100:4.3e9,103:2.9e9,102:0.9e9}[h.vmid],ctime:h.end,format:'zst'}));
+  return{now:n,jobs:[],guests,history,files,
+    running:[{vmid:'103',start:n-95,percent:62,detail:'2.1 GiB of 3.4 GiB',line:'INFO:  62% (2.1 GiB of 3.4 GiB) in 1m 35s, read: 98 MiB/s, write: 61 MiB/s'}],
+    upload:{age:2*H,t:n-2*H,status:'ok',started:n-2*H-600,finished:n-2*H,files:3,bytes:9.4e9,error:'',
+      log:['2026/11/23 05:00:03 INFO  : Starting transfers','2026/11/23 05:09:41 INFO  : vzdump-qemu-100-2026_11_23-04_00_00.vma.zst: Copied (new)','2026/11/23 05:10:02 INFO  : Transferred: 9.4 GiB / 9.4 GiB, 100%']}}}
+const fakeNode=()=>({network:[{iface:'nic0',type:'eth',active:1},{iface:'vmbr0',type:'bridge',cidr:'192.0.2.10/24',gateway:'192.0.2.1',bridge_ports:'nic0',active:1},
+  {iface:'vmbr1',type:'bridge',cidr:'198.51.100.1/24',bridge_ports:'',active:1}],
+  disks:[{devpath:'/dev/nvme0n1',model:'Samsung SSD 980 500GB',size:500e9,type:'nvme',health:'PASSED',wearout:97}]});
+const fakeVmDetail=()=>selVm.startsWith('lxc')?{facts:[['hostname','CT102'],['cores','1'],['memory','512'],['swap','512'],['ostype','ubuntu'],['arch','amd64'],['onboot','1'],['unprivileged','1']],
+  nics:[{id:'net0',model:'veth',mac:'02:00:00:00:01:02',bridge:'vmbr0',ip:'dhcp',firewall:false}],disks:[{id:'rootfs',volume:'local-lvm:vm-102-disk-0',size:'4G'}],snapshots:[],ips:['192.0.2.176/24'],desc:''}
+ :{facts:[['cores','2'],['sockets','1'],['memory','4096'],['bios','ovmf'],['machine','q35'],['ostype','l26'],['boot','order=scsi0'],['onboot','1'],['agent','1']],
+  nics:[{id:'net0',model:'virtio',mac:'02:00:00:00:02:03',bridge:'vmbr0',ip:'',firewall:true}],disks:[{id:'scsi0',volume:'local-lvm:vm-100-disk-0',size:'32G'},{id:'ide2',volume:'none',size:'',media:'cdrom'}],
+  snapshots:[{name:'clean-install',desc:'fresh install',time:Date.now()/1000-86400*3,parent:''},{name:'configured',desc:'',time:Date.now()/1000-86400*2,parent:'clean-install'}],ips:['192.0.2.131/24'],desc:'File sync server'};
+
+// ---------- charts ----------
+const fmtPct=v=>Math.round(v*100)+'%';
+const fmtBps=v=>v>=1e6?(v/1e6).toFixed(1)+' MB/s':v>=1e3?Math.round(v/1e3)+' KB/s':Math.round(v)+' B/s';
+const fmtLoad=v=>v.toFixed(2);
+const CPU={title:'CPU usage',series:[{key:'cpu',label:'CPU usage',color:'--s1'},{key:'iowait',label:'I/O wait',color:'--s2'}],fmt:fmtPct};
+const MEM={title:'Memory usage',series:[{key:'memb',label:'Used',color:'--s1'},{key:'memtotal',label:'Total',color:'--mut',dash:1}],fmt:fmtB};
+const NET={title:'Network traffic',series:[{key:'netin',label:'Incoming',color:'--s1'},{key:'netout',label:'Outgoing',color:'--s2'}],fmt:fmtBps};
+const OVERVIEWCHARTS=[CPU,MEM,NET];
+const NODECHARTS=[{...CPU,span:4},{...MEM,span:3},{...NET,span:3},
+ {title:'Load average (1m)',span:2,series:[{key:'load',label:'Load',color:'--s1'}],fmt:fmtLoad},
+ {title:'Swap usage',span:2,series:[{key:'swap',label:'Swap used',color:'--s1'}],fmt:fmtPct,max:1},
+ {title:'Root disk usage',span:2,series:[{key:'disk',label:'Disk used',color:'--s1'}],fmt:fmtPct,max:1}];
+const VMCHARTS=[{...CPU,series:[CPU.series[0]],span:4},{...MEM,span:3},{...NET,span:3},
+ {title:'Disk IO',span:6,series:[{key:'diskr',label:'Reads',color:'--s1'},{key:'diskw',label:'Writes',color:'--s2'}],fmt:fmtBps}];
+const nice=m=>{m*=1.1;const e=10**Math.floor(Math.log10(m)),n=m/e;return(n<=1?1:n<=2?2:n<=5?5:10)*e};
+const tlabel=t=>{const d=new Date(t*1000);return tf==='week'||tf==='month'?d.toLocaleDateString([],tf==='week'?{weekday:'short',hour:'2-digit'}:{month:'short',day:'numeric'}):d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})};
+const spark=h=>{if(h.length<2)return'';const p=h.map((y,i)=>`${i*(100/(h.length-1))},${24-Math.min(1,y)*22}`).join(' ');return`<svg class="sp" viewBox="0 0 100 26" preserveAspectRatio="none"><polyline points="${p}" fill="none" stroke="var(--s1)" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`};
+
+function drawGrid(el,cfgs,pts,tag,err,spans){
+  if(!pts.length){el.innerHTML=`<div class="card empty" style="grid-column:1/-1">${err?'No usage history: '+esc(err):'No usage history yet.'}</div>`;return}
+  el.innerHTML=cfgs.map((c,i)=>`<section class="card"${spans&&c.span?` style="grid-column:span ${c.span}"`:''}><h2>${c.title}</h2><div class="leg">${c.series.length>1?c.series.map(s=>`<span><span class="key" style="border-color:var(${s.color})${s.dash?';border-top-style:dashed':''}"></span>${s.label}</span>`).join(''):'&nbsp;'}</div><div class="cbox" id="${tag}${i}"></div></section>`).join('');
+  cfgs.forEach((c,i)=>chart($(tag+i),pts,c));
+}
+function chart(box,pts,c){
+  const tl=c.tl||tlabel,W=c.span>=6?1200:c.span>=4?900:600,H=170,L=56,R=10,T=10,B=22,iw=W-L-R,ih=H-T-B,n=pts.length;
+  const max=c.max||nice(Math.max(...pts.flatMap(p=>c.series.map(s=>p[s.key]||0)),1e-9));
+  const x=i=>L+(n>1?i*iw/(n-1):0),y=v=>T+ih-Math.min(v,max)/max*ih;
+  let g='';
+  [0,.5,1].forEach(f=>{const yy=T+ih-f*ih;g+=`<line class="gl" x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}"/><text class="ax" x="${L-6}" y="${yy+4}" text-anchor="end">${c.fmt(max*f)}</text>`});
+  [[0,'start'],[Math.floor((n-1)/2),'middle'],[n-1,'end']].forEach(([i,a])=>g+=`<text class="ax" x="${x(i)}" y="${H-6}" text-anchor="${a}">${tl(pts[i].t)}</text>`);
+  const line=s=>pts.map((p,i)=>x(i).toFixed(1)+','+y(p[s.key]||0).toFixed(1)).join(' ');
+  g+=c.series.map(s=>`${s.dash?'':`<polygon points="${x(0)},${T+ih} ${line(s)} ${x(n-1)},${T+ih}" fill="var(${s.color})" fill-opacity=".18"/>`}<polyline fill="none" stroke="var(${s.color})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${s.dash?' stroke-dasharray="5 4"':''} points="${line(s)}"/>`).join('');
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${c.title} over time">${g}<line class="cross" y1="${T}" y2="${T+ih}" stroke="var(--mut)" stroke-width="1" visibility="hidden"/>
+    ${c.series.map((s,k)=>`<circle class="dot${k}" r="4" fill="var(${s.color})" stroke="var(--card)" stroke-width="2" visibility="hidden"/>`).join('')}<rect x="${L}" y="${T}" width="${iw}" height="${ih}" fill="transparent" tabindex="0"/></svg><div class="tip" hidden></div>`;
+  const svg=box.querySelector('svg'),tip=box.querySelector('.tip'),cross=svg.querySelector('.cross'),rect=svg.querySelector('rect');
+  const show=i=>{i=Math.max(0,Math.min(n-1,i));const p=pts[i],xx=x(i);
+    cross.setAttribute('x1',xx);cross.setAttribute('x2',xx);cross.setAttribute('visibility','visible');
+    c.series.forEach((s,k)=>{const d=svg.querySelector('.dot'+k);d.setAttribute('cx',xx);d.setAttribute('cy',y(p[s.key]||0));d.setAttribute('visibility','visible')});
+    tip.hidden=false;tip.replaceChildren();
+    const t=document.createElement('div');t.className='t';t.textContent=tl(p.t);tip.append(t);
+    c.series.forEach(s=>{const r=document.createElement('div'),k=document.createElement('span'),b=document.createElement('b'),l=document.createElement('span');
+      k.className='key';k.style.borderColor=`var(${s.color})`;b.textContent=c.fmt(p[s.key]||0);l.className='mut';l.textContent=' '+s.label;r.append(k,b,l);tip.append(r)});
+    tip.style.left=Math.min(xx/W*svg.clientWidth+12,svg.clientWidth-tip.offsetWidth)+'px'};
+  const hide=()=>{cross.setAttribute('visibility','hidden');svg.querySelectorAll('circle').forEach(d=>d.setAttribute('visibility','hidden'));tip.hidden=true};
+  rect.addEventListener('pointermove',e=>{const r=svg.getBoundingClientRect();show(Math.round(((e.clientX-r.left)/r.width*W-L)/iw*(n-1)))});
+  rect.addEventListener('pointerleave',hide);rect.addEventListener('blur',hide);rect.addEventListener('focus',()=>show(n-1));
+  rect.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();rect.dataset.i=Math.max(0,Math.min(n-1,+(rect.dataset.i??n-1)+(e.key==='ArrowLeft'?-1:1)));show(+rect.dataset.i)}});
+}
+
+// ---------- data loading ----------
+async function pull(){
+  let err='';
+  try{data=demo?fakeExtras(fake()):await(await fetch('/api/status')).json();if(data.vms.error)err='Proxmox unreachable: '+data.vms.error;$('upd').textContent='Updated '+new Date().toTimeString().slice(0,8)}
+  catch(e){err='Cannot reach the dashboard server. Check that it is running.'}
+  $('err').hidden=!err;$('err').textContent=err;
+  const nd=data.vms.items.find(v=>v.type==='node');if(nd){hist.push(nd.cpu||0);if(hist.length>40)hist.shift()}
+  render();
+  // while a backup runs (or the Backups tab is open) follow its progress every 5 s instead of every 30 s
+  if(view==='backups'||(view==='overview'&&bk&&(bk.running||[]).length))pullBackups();
+}
+async function pullCharts(){
+  const sum=view==='node'||view==='vm';if(!sum&&view!=='overview')return;
+  const box=sum?$('sumcharts'):$('charts'),busy=sum?$('summary'):box;busy.classList.add('busy');let pts=[],err='';
+  try{
+    if(view==='vm'){
+      const [kind,id]=selVm.split('/');
+      const [g,i]=demo?[{points:fakePts(4*2**30)},null]:await Promise.all([
+        fetch(`/api/vmgraph?type=${encodeURIComponent(kind)}&vmid=${encodeURIComponent(id)}&tf=${tf}&cf=${cf}`).then(r=>r.json()),
+        fetch(`/api/vminfo?type=${encodeURIComponent(kind)}&vmid=${encodeURIComponent(id)}`).then(r=>r.json())]);
+      pts=g.points||[];err=g.error||'';vinfo=i&&!i.error?{key:selVm,...i}:null;renderSummary();
+    }else{
+      const g=demo?{points:fakePts(16*2**30)}:await(await fetch(`/api/graphs?tf=${tf}&cf=${cf}`)).json();pts=g.points||[];err=g.error||'';
+    }
+  }catch(e){err='Cannot load usage history.'}
+  drawGrid(box,view==='vm'?VMCHARTS:view==='node'?NODECHARTS:OVERVIEWCHARTS,pts,'hc',err,sum);
+  if(view==='overview')$('gtable').innerHTML=pts.length?`<table><thead><tr><th>Time</th><th>CPU</th><th>Memory</th><th>Load</th><th>Net in</th><th>Net out</th></tr></thead><tbody>${pts.filter((_,i)=>i%Math.ceil(pts.length/24)===0||i===pts.length-1).map(p=>`<tr><td class="mono">${tlabel(p.t)}</td><td class="mono">${fmtPct(p.cpu)}</td><td class="mono">${fmtPct(p.mem)}</td><td class="mono">${fmtLoad(p.load)}</td><td class="mono">${fmtBps(p.netin)}</td><td class="mono">${fmtBps(p.netout)}</td></tr>`).join('')}</tbody></table>`:'';
+  busy.classList.remove('busy');
+}
+async function pullTasks(){
+  if($('tasks-card').hidden)return;
+  try{const t=demo?{items:fakeTasks()}:await(await fetch('/api/tasks'+(view==='vm'?'?vmid='+selVm.split('/')[1]:''))).json();tasks=t.items||[];terr=t.error||''}
+  catch(e){tasks=[];terr='Cannot load tasks.'}
+  renderTasks();
+}
+
+async function pullDetail(){
+  try{
+    if(view==='node'){ndetail=demo?fakeNode():await(await fetch('/api/nodedetail')).json();renderNodeDetail()}
+    else if(view==='vm'){
+      const [kind,id]=selVm.split('/'),key=selVm;
+      const d=demo?fakeVmDetail():await(await fetch(`/api/vmdetail?type=${encodeURIComponent(kind)}&vmid=${encodeURIComponent(id)}`)).json();
+      if(key===selVm){vdetail={key,...d};renderVmDetail();renderSummary()}
+    }
+  }catch(e){}
+}
+
+// ---------- rendering ----------
+const badge=(c,t)=>`<span class="badge ${c}">${t}</span>`;
+const mini=p=>`<span class="mini"><i style="width:${Math.min(100,pct(p))}%"></i></span>`;
+const barx=p=>`<div class="bar"><i style="width:${Math.min(100,pct(p))}%"></i></div>`;
+const AG={working:['ok','Active'],idle:['','Idle'],offline:['bad','Offline']};
+const card=(l,v,s,x='')=>`<div class="card stat"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}${x}</div>`;
+const byHost=a=>[...a].sort((p,q)=>(p.host||'~').localeCompare(q.host||'~')||p.name.localeCompare(q.name));
+const hostOf=v=>v==='hs-agents'?'homeserver':v==='mac-agents'?'my-mac':null;  // agent tabs show one host's agents
+const size=b=>b>=2**30?(b/2**30).toFixed(2)+' GiB':(b/2**20).toFixed(2)+' MiB';
+const usage=(used,total)=>`${(used/total*100).toFixed(2)}% (${size(used)} of ${size(total)})`;
+const when=t=>t?new Date(t*1000).toLocaleString('en-GB',{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}):'';
+
+function render(){
+  const vm=data.vms.items.filter(v=>v.type!=='node'),nd=data.vms.items.find(v=>v.type==='node'),a=data.agents,H=data.host,rf=H&&H.rootfs;
+  $('ext').innerHTML=(data.links||[]).map(l=>`<a class="ext" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.name)}</a>`).join('');
+  $('tree').innerHTML=`<a href="#node"><span class="sd ${nd&&nd.status==='online'?'on':''}"></span>${esc(nd?(nd.name||nd.node):'pve')}</a>`+
+    vm.map(v=>`<a class="t1" href="#vm/${esc(vkey(v))}"><span class="sd ${v.status==='running'?'on':''}"></span>${esc(v.name)} <span class="mut">${esc(v.vmid)}</span></a>`).join('');
+  markNav();
+  $('stats').innerHTML=
+    card('Host CPU',nd?pct(nd.cpu)+'%':'-','',spark(hist))+
+    card('Host memory',nd?pct(nd.mem/nd.maxmem)+'%':'-',nd?`${gb(nd.mem)} / ${gb(nd.maxmem)} GiB`:'',nd?barx(nd.mem/nd.maxmem):'')+
+    card('Root disk',rf?pct(rf.used/rf.total)+'%':'-',rf?`${gb(rf.used)} / ${gb(rf.total)} GiB`:'',rf?barx(rf.used/rf.total):'')+
+    card('Load average',H&&H.load?H.load[0]:'-',H&&H.load?`5m ${H.load[1]} · 15m ${H.load[2]}`:'')+
+    card('VMs running',`${vm.filter(v=>v.status==='running').length} / ${vm.length}`,`${vm.filter(v=>v.status!=='running').length} stopped`)+
+    card('Agents active',`${a.filter(x=>x.status==='working').length} / ${a.length}`,`${a.filter(x=>x.status==='offline').length} offline`);
+  renderTitle();renderSummary();renderVMs(vm);renderMac();renderAgents(a);renderStorage();renderMacCharts();
+}
+// ---------- extra detail: storage, network, disks, VM hardware, snapshots, Mac history ----------
+const tbl=(head,rows)=>`<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+const none=t=>`<div class="empty">${t}</div>`;
+function renderStorage(){
+  const st=data.vms.storage||[];
+  $('storage').innerHTML=st.length?tbl(['Name','Type','Status','Usage','Content'],st.map(s=>`<tr>
+    <td><b>${esc(s.name)}</b>${s.shared?' <span class="mut">shared</span>':''}</td><td class="mono mut">${esc(s.type||'-')}</td>
+    <td>${badge(s.status==='available'?'ok':'bad',esc(s.status||'-'))}</td>
+    <td class="mono">${s.total?mini(s.used/s.total)+(s.used/s.total*100).toFixed(1)+'% · '+size(s.used)+' of '+size(s.total):'-'}</td>
+    <td class="mono mut">${esc(s.content||'-')}</td></tr>`)):none('No storage data.');
+}
+function renderNodeDetail(){
+  const d=ndetail||{};
+  $('net').innerHTML=(d.network||[]).length?tbl(['Interface','Type','Address','Gateway','Bridge ports','State'],d.network.map(i=>`<tr>
+    <td><b>${esc(i.iface)}</b></td><td class="mono mut">${esc(i.type)}</td><td class="mono">${esc(i.cidr||i.address||'-')}</td>
+    <td class="mono mut">${esc(i.gateway||'-')}</td><td class="mono mut">${esc(i.bridge_ports||'-')}</td>
+    <td>${badge(i.active?'ok':'',i.active?'Active':'Inactive')}</td></tr>`)):none(d.error||d.network_error?'Cannot read network: '+esc(d.error||d.network_error):'No interfaces.');
+  $('disks').innerHTML=(d.disks||[]).length?tbl(['Device','Model','Type','Size','Health','Wearout'],d.disks.map(k=>`<tr>
+    <td class="mono"><b>${esc(k.devpath)}</b></td><td>${esc(k.model||k.vendor||'-')}</td><td class="mono mut">${esc(k.type||'-')}</td><td class="mono">${k.size?size(k.size):'-'}</td>
+    <td>${badge(k.health==='PASSED'||k.health==='OK'?'ok':k.health&&k.health!=='UNKNOWN'?'bad':'',esc(k.health||'-'))}</td>
+    <td class="mono mut">${k.wearout!=null&&k.wearout!=='N/A'?esc(k.wearout)+'%':'-'}</td></tr>`)):none(d.error||d.disks_error?'Cannot read disks: '+esc(d.error||d.disks_error):'No physical disks listed.');
+}
+function renderVmDetail(){
+  const d=vdetail&&vdetail.key===selVm?vdetail:null;
+  if(!d){$('conf').innerHTML=none('Loading…');$('snaps').innerHTML=none('Loading…');return}
+  if(d.error){$('conf').innerHTML=none('Cannot read VM config: '+esc(d.error));$('snaps').innerHTML=none('-');return}
+  $('conf').innerHTML=`${d.facts.length?`<dl class="kv">${d.facts.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`:''}
+    ${d.nics.length?`<div class="sub">Network devices</div>`+tbl(['ID','Model','MAC','Bridge','IP','Firewall'],d.nics.map(n=>`<tr><td class="mono">${esc(n.id)}</td><td class="mono mut">${esc(n.model||'-')}</td><td class="mono">${esc(n.mac||'-')}</td><td class="mono">${esc(n.bridge||'-')}</td><td class="mono mut">${esc(n.ip||'-')}</td><td>${badge(n.firewall?'ok':'',n.firewall?'On':'Off')}</td></tr>`)):''}
+    ${d.disks.length?`<div class="sub">Disks</div>`+tbl(['ID','Volume','Size'],d.disks.map(k=>`<tr><td class="mono">${esc(k.id)}</td><td class="mono">${esc(k.volume||'-')}${k.media?` <span class="mut">${esc(k.media)}</span>`:''}</td><td class="mono">${esc(k.size||'-')}</td></tr>`)):''}
+    ${d.desc?`<div class="sub">Notes</div><div class="note">${esc(d.desc)}</div>`:''}`||none('No config.');
+  $('snaps').innerHTML=d.snapshots.length?tbl(['Name','Description','Taken','Parent'],d.snapshots.map(s=>`<tr><td><b>${esc(s.name)}</b></td><td class="mut">${esc(s.desc||'-')}</td><td class="mono">${s.time?when(s.time):'-'}</td><td class="mono mut">${esc(s.parent||'-')}</td></tr>`)):none('No snapshots.');
+}
+const clock=t=>new Date(t*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+const MACCHARTS=[{title:'Load per core (1m)',series:[{key:'cpu',label:'Load',color:'--s1'}],fmt:fmtPct,tl:clock},
+  {title:'Memory used',series:[{key:'mem',label:'Memory',color:'--s1'}],fmt:fmtPct,max:1,tl:clock}];
+function renderMacCharts(){
+  const h=(data.hostvms||[])[0],pts=(h&&h.hist)||[],sig=pts.length+':'+(pts.length?pts[pts.length-1].t:'');
+  if(sig===macSig)return;macSig=sig;  // charts only redraw when a new sample arrived, so a hover tooltip survives the 5 s refresh
+  if(pts.length<2)$('machart').innerHTML=`<div class="card empty" style="grid-column:1/-1">History appears after a few reports. Run report_utm.py every minute to chart load and memory.</div>`;
+  else drawGrid($('machart'),MACCHARTS,pts,'mc','');
+}
+const TLW=21600;  // the agent timeline strip covers the last 6 hours
+const strip=x=>`<div class="tl" role="img" aria-label="Status over the last 6 hours">${(x.timeline||[]).map(([sa,ea,st])=>`<i class="${esc(st)}" style="left:${(100-sa/TLW*100).toFixed(2)}%;width:${((sa-ea)/TLW*100).toFixed(2)}%" title="${esc((AG[st]||[0,st])[1])} · ${dur(sa)} ago ${ea?'to '+dur(ea)+' ago':'to now'}"></i>`).join('')}</div>`;
+function curVm(){return data.vms.items.find(v=>v.type!=='node'&&vkey(v)===selVm)}
+function renderTitle(){
+  const nd=data.vms.items.find(v=>v.type==='node'),nn=(nd&&(nd.name||nd.node))||'pve',v=view==='vm'&&curVm();
+  $('title').textContent=view==='node'?`Node '${nn}'`:view==='vm'?(v?`${v.type==='lxc'?'Container':'Virtual Machine'} ${v.vmid} (${v.name}) on node '${nn}'`:'VM '+selVm):VTITLE[view];
+}
+// Proxmox-style status panel: label and value on one line, usage rows get a bar underneath
+function renderSummary(){
+  if(view!=='node'&&view!=='vm')return;
+  const R=(l,t,f)=>`<div class="sr"><div class="sl"><span>${l}</span><span class="mono">${esc(t)}</span></div>${f!=null?barx(f):''}</div>`;
+  const nd=data.vms.items.find(v=>v.type==='node'),H=data.host;let title='',rows='';
+  if(view==='node'){
+    title=(nd&&(nd.name||nd.node))||'pve';
+    rows=R('Status',nd?nd.status:'-')+R('Uptime',dur((H&&H.uptime)||(nd&&nd.uptime)||0))+
+      (nd?R('CPU usage',`${(nd.cpu*100).toFixed(1)}% of ${(H&&H.cores)||nd.maxcpu||'?'} CPU(s)`,nd.cpu)+R('Memory usage',usage(nd.mem,nd.maxmem),nd.mem/nd.maxmem):'')+
+      (H&&H.swap&&H.swap.total?R('Swap usage',usage(H.swap.used,H.swap.total),H.swap.used/H.swap.total):'')+
+      (H&&H.rootfs?R('Root disk usage',usage(H.rootfs.used,H.rootfs.total),H.rootfs.used/H.rootfs.total):'')+
+      (H&&H.load?R('Load average',H.load.join(', ')):'')+(H?R('Proxmox VE',H.pve||'-')+R('Kernel',H.kernel||'-')+R('CPU',H.cpu_model||'-'):'');
+  }else{
+    const v=curVm(),i=vinfo&&vinfo.key===selVm?vinfo:null;
+    if(!v){$('suminfo').innerHTML='<h2>VM</h2><div class="empty">This VM is not in the Proxmox list.</div>';return}
+    const cpu=i&&i.cpu!=null?i.cpu:v.cpu||0,mem=i&&i.mem!=null?i.mem:v.mem||0,maxmem=(i&&i.maxmem)||v.maxmem,disk=(i&&i.disk)||v.disk||0,maxdisk=(i&&i.maxdisk)||v.maxdisk;
+    title=v.name;
+    rows=R('Status',(i&&i.status)||v.status)+R('Type',v.type==='lxc'?'Container (LXC)':'Virtual machine (QEMU)')+R('Node',v.node||'pve')+R('Uptime',isOn(v)&&v.uptime?dur(v.uptime):'-')+
+      R('CPU usage',`${(cpu*100).toFixed(2)}% of ${(i&&i.cpus)||v.maxcpu||'?'} CPU(s)`,cpu)+
+      (maxmem?R('Memory usage',usage(mem,maxmem),mem/maxmem):'')+
+      (i&&i.maxswap?R('Swap usage',usage(i.swap||0,i.maxswap),(i.swap||0)/i.maxswap):'')+
+      (maxdisk?(v.type==='lxc'?R('Bootdisk usage',usage(disk,maxdisk),disk/maxdisk):R('Bootdisk size',gb(maxdisk)+' GiB')):'')+
+      (vdetail&&vdetail.key===selVm&&(vdetail.ips||[]).length?R('IPs',vdetail.ips.join(', ')):'')+
+      (isOn(v)&&v.netin!=null?R('Network total',`↓ ${fmtB(v.netin)}  ↑ ${fmtB(v.netout)}`):'');
+  }
+  $('suminfo').innerHTML=`<h2>${esc(title)}</h2><div class="sumlist">${rows}</div>`;
+}
+function renderTasks(){
+  $('taskhint').textContent=view==='vm'?'· this VM only':view==='overview'?'· latest 8':'';
+  $('tasks').innerHTML=tasks.length?`<table><thead><tr><th>Start time</th><th>End time</th><th>Node</th><th>User name</th><th>Description</th><th>Status</th></tr></thead><tbody>${(view==='overview'?tasks.slice(0,8):tasks).map(t=>`<tr>
+    <td class="mono">${when(t.start)}</td><td class="mono">${t.end?when(t.end):'<span class="mut">running</span>'}</td><td class="mono">${esc(t.node)}</td><td class="mono">${esc(t.user)}</td>
+    <td>${esc(t.desc)}</td><td>${badge(t.status==='OK'?'ok':t.status==='running'?'':'bad',esc(t.status))}</td></tr>`).join('')}</tbody></table>`
+    :`<div class="empty">${terr?'No task history: '+esc(terr):'No tasks.'}</div>`;
+}
+function renderVMs(vm){
+  $('vmhint').textContent=vm.length?'· click one for details':'';
+  $('vms').innerHTML=vm.length?`<table><thead><tr><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Network (total)</th><th>Uptime</th></tr></thead><tbody>${vm.map(v=>{const on=isOn(v);return`<tr data-vm="${esc(vkey(v))}" tabindex="0">
+    <td><b>${esc(v.name)}</b> <span class="mut mono">${esc(v.type)} ${esc(v.vmid)}${v.maxcpu?' · '+v.maxcpu+' vCPU':''}</span></td>
+    <td>${badge(on?'ok':'bad',on?'Running':'Stopped')}</td>
+    <td class="mono">${on?mini(v.cpu)+pct(v.cpu)+'%':'<span class="mut">-</span>'}</td>
+    <td class="mono">${on?mini(v.mem/v.maxmem)+gb(v.mem)+' / '+gb(v.maxmem)+' GiB':'<span class="mut">-</span>'}</td>
+    <td class="mono">${v.maxdisk?gb(v.maxdisk)+' GiB':'<span class="mut">-</span>'}</td>
+    <td class="mono">${on&&v.netin!=null?'↓ '+fmtB(v.netin)+' &nbsp;↑ '+fmtB(v.netout):'<span class="mut">-</span>'}</td>
+    <td class="mono mut">${on&&v.uptime?dur(v.uptime):'-'}</td></tr>`}).join('')}</tbody></table>`
+    :'<div class="empty">No VM data. Check that PVE_HOST and PVE_TOKEN are set.</div>';
+  $('vms').querySelectorAll('tr[data-vm]').forEach(tr=>{
+    const go=()=>{location.hash='vm/'+tr.dataset.vm};
+    tr.onclick=go;tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}});
+}
+function renderMac(){
+  const hv=data.hostvms||[];
+  $('machost').innerHTML=hv.map(h=>{const s=h.stats||{};
+    return`<section class="card"><h2>${esc(h.host)} <span class="mut">· reported ${ago(h.age)}${h.age>300?' (stale)':''}</span></h2>${s.mem_total?`<dl class="kv">
+    <div><dt>Load per core (1m)</dt><dd>${pct(s.cpu)}%${barx(s.cpu)}</dd></div>
+    <div><dt>Memory</dt><dd>${gb(s.mem_used)} / ${gb(s.mem_total)} GiB${barx(s.mem_used/s.mem_total)}</dd></div>
+    <div><dt>Disk</dt><dd>${gb(s.disk_used)} / ${gb(s.disk_total)} GiB${barx(s.disk_used/s.disk_total)}</dd></div>
+    <div><dt>Uptime</dt><dd>${dur(Math.round(s.uptime||0))}</dd></div></dl>`:'<div class="empty">No machine stats reported yet. Run report_utm.py on the Mac.</div>'}</section>`}).join('')
+    ||'<section class="card"><h2>My Mac</h2><div class="empty">Nothing reported yet. Run report_utm.py on the Mac.</div></section>';
+  $('hostvms').innerHTML=hv.map(h=>`<section class="card"><h2>${esc(h.host)} VMs (UTM)</h2>
+    ${h.items.length?`<table><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>${h.items.map(i=>`<tr><td><b>${esc(i.name)}</b></td><td>${badge(i.status==='started'||i.status==='running'?'ok':'',esc(i.status))}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No VMs.</div>'}</section>`).join('');
+}
+function renderAgents(all){
+  const hs=hostOf(view),av=all.filter(x=>!hs||slug(x.host)===hs),n=s=>av.filter(x=>x.status===s).length;
+  $('agsum').innerHTML=[['Active','working'],['Idle','idle'],['Offline','offline']].map(([l,s])=>`<div class="card tile"><div class="n">${n(s)}</div><div class="l">${l}</div></div>`).join('');
+  $('agents').innerHTML=av.length?`<table><thead><tr><th>Agent</th><th>Status</th><th>In this status</th><th>Last 6 hours</th><th>Last seen</th><th>Heartbeats</th></tr></thead><tbody>${byHost(av).map((x,i,arr)=>{const s=AG[x.status]||['',esc(x.status)];
+    return(!hs&&(!i||arr[i-1].host!==x.host)?`<tr><td colspan="6" class="grp">${esc(x.host||'Unspecified')}</td></tr>`:'')+`<tr>
+    <td><div class="who"><span class="av">${esc(x.name[0]?.toUpperCase())}</span><div><b>${esc(x.name)}</b><div class="mut">${esc(x.task)||'No task'}</div></div></div></td>
+    <td>${badge(s[0],s[1])}</td><td class="mono mut">${dur(x.since_age||0)}</td><td>${strip(x)}</td><td class="mono mut">${ago(x.age)}</td><td class="mono mut">${x.beats??'-'}</td></tr>`}).join('')}</tbody></table>`
+    :'<div class="empty">No agents yet. An agent appears here after its first POST to /api/agent.</div>';
+  const ev=(data.events||[]).filter(e=>!hs||slug(e.host)===hs);
+  $('events').innerHTML=ev.length?`<ul class="feed">${ev.map(e=>{const s=AG[e.status]||['',esc(e.status)];
+    return`<li><span class="t mono mut">${ago(e.age)}</span><b>${esc(e.name)}</b>${badge(s[0],s[1])}<span class="mut">${esc(e.task)}</span></li>`}).join('')}</ul>`:'<div class="empty">No activity recorded since the server started.</div>';
+}
+
+// ---------- backups: Proxmox vzdump jobs + the Offsite upload job ----------
+const UPLOAD_STALE=26*3600;  // the upload runs daily; a day plus a margin without a report means it stopped
+async function pullBackups(){
+  if(view!=='backups'&&view!=='overview')return;
+  try{bk=demo?fakeBackups():await(await fetch('/api/backups')).json()}catch(e){bk={error:'Cannot load backup status.'}}
+  renderBackups();renderBkMini();
+}
+const gname=g=>g.name||'#'+g.vmid;
+function guestResult(g,run){
+  const r=run.find(x=>+x.vmid===g.vmid);
+  if(r)return badge('',`Running${r.percent!=null?' '+r.percent+'%':''}`);
+  if(!g.last)return badge('',g.schedule?'No run yet':'Manual only');
+  const ok=g.last.status==='OK',over=g.enabled&&bk.now-g.last.start>36*3600;
+  return badge(ok?'ok':'bad',ok?'OK':esc(g.last.status))+(over?' '+badge('bad','Overdue'):'');
+}
+function uploadState(){
+  const u=bk&&bk.upload;if(!u)return{label:'No report',cls:'',sub:'not reported yet'};
+  if(u.age>UPLOAD_STALE)return{label:'Stale',cls:'bad',sub:`last report ${ago(u.age)}`};
+  return u.status==='ok'?{label:'OK',cls:'ok',sub:ago(u.age)}:{label:'Failed',cls:'bad',sub:ago(u.age)};
+}
+const tileV=(l,v,s,cls='',x='')=>`<div class="card stat"><div class="l">${l}</div><div class="v"${cls==='bad'?' style="color:var(--bad)"':cls==='ok'?' style="color:var(--ok)"':''}>${v}</div>${s?`<div class="s">${s}</div>`:''}${x}</div>`;
+function renderBackups(){
+  if(!bk)return;
+  const u=uploadState(),guests=bk.guests||[],run=bk.running||[],sched=guests.filter(g=>g.schedule);
+  const okN=sched.filter(g=>g.last&&g.last.status==='OK').length,badN=sched.filter(g=>g.last&&g.last.status!=='OK').length;
+  const nexts=guests.filter(g=>g.enabled&&g.next_run).sort((a,b)=>a.next_run-b.next_run),nx=nexts[0],total=guests.reduce((s,g)=>s+(g.total||0),0);
+  $('bk-tiles').innerHTML=bk.error?'':
+    tileV('Last result',`${okN} / ${sched.length}`,`${badN} failed${sched.length-okN-badN?` · ${sched.length-okN-badN} not run yet`:''}`,badN?'bad':'')+
+    tileV('Running now',run.length?(run[0].percent!=null?run[0].percent+'%':'…'):'None',run.length?`VM/CT ${esc(run[0].vmid||'?')}`:'no backup in progress',run.length?'':'',run.length&&run[0].percent!=null?barx(run[0].percent/100):'')+
+    tileV('Next backup',nx?'in '+dur(Math.max(0,nx.next_run-bk.now)):'-',nx?`${esc(gname(nx))} · ${when(nx.next_run)}`:'no schedule found')+
+    (bk.files_hidden?tileV('Archives on storage','hidden','needs VM.Backup permission'):tileV('Archives on storage',size(total),`${(bk.files||[]).length} archives`))+
+    tileV('Offsite upload',u.label,u.sub,u.cls);
+  $('bk-running').hidden=!run.length;
+  $('bk-run').innerHTML=run.map(r=>{const g=guests.find(x=>String(x.vmid)===String(r.vmid));
+    return`<div class="runrow"><div class="sl"><span><b>${esc(g?gname(g):'VM/CT '+esc(r.vmid||'?'))}</b> <span class="mut">started ${ago(Math.round(bk.now-r.start))}</span></span><span class="mono">${r.percent!=null?r.percent+'% · '+esc(r.detail||''):'starting…'}</span></div>
+    ${barx((r.percent||0)/100)}<div class="mono mut" style="margin-top:6px">${esc(r.line)}</div></div>`}).join('');
+  $('bk-guests').innerHTML=bk.error?none(esc(bk.error)):guests.length?tbl(['Guest','Schedule','Last backup','Duration','Size','Result','Copies kept','Next run'],guests.map(g=>`<tr>
+    <td><b>${esc(gname(g))}</b> <span class="mut mono">${esc(g.type)} ${g.vmid}</span></td>
+    <td class="mono">${esc(g.schedule||'-')}${g.enabled?'':' <span class="mut">off</span>'}</td>
+    <td class="mono">${g.last?when(g.last.start)+' <span class="mut">'+ago(Math.round(bk.now-g.last.start))+'</span>':'-'}</td>
+    <td class="mono mut">${g.last?dur(g.last.end-g.last.start):'-'}</td>
+    <td class="mono">${g.last_size&&g.last_size!=='n/a'?esc(g.last_size):'-'}</td>
+    <td>${guestResult(g,run)}</td>
+    <td class="mono">${bk.files_hidden?'<span class="mut">hidden</span>':g.copies+' <span class="mut">'+(g.total?'· '+size(g.total):'')+'</span>'}<span class="mut">${g.prune?' · '+esc(g.prune):''}</span></td>
+    <td class="mono mut">${g.next_run&&g.enabled?when(g.next_run):'-'}</td></tr>`)):none('No backup jobs or archives found.');
+  const hist=bk.history||[];
+  $('bk-history').innerHTML=hist.length?tbl(['Started','Guest','Duration','Result'],hist.slice(0,15).map(h=>{const g=guests.find(x=>String(x.vmid)===h.vmid);return`<tr>
+    <td class="mono">${when(h.start)}</td><td>${esc(g?gname(g):'VM/CT '+h.vmid)}</td><td class="mono mut">${dur(h.end-h.start)}</td>
+    <td>${badge(h.status==='OK'?'ok':'bad',esc(h.status))}</td></tr>`})):none('No backup tasks yet.');
+  const files=bk.files||[];$('bk-fhint').textContent=files.length>25?`· newest 25 of ${files.length}`:'';
+  $('bk-files').innerHTML=files.length?tbl(['Archive','Guest','Created','Size','Storage'],files.slice(0,25).map(f=>{const g=guests.find(x=>String(x.vmid)===f.vmid);return`<tr>
+    <td class="mono">${esc((f.volid||'').split('/').pop())}</td><td>${esc(g?gname(g):f.vmid)}</td><td class="mono">${f.ctime?when(f.ctime):'-'}</td>
+    <td class="mono">${f.size?size(f.size):'-'}</td><td class="mono mut">${esc(f.storage)}</td></tr>`})):none(bk.files_hidden?'Proxmox hides backup archives from read-only API tokens. The results above come from task history; to list the archives, give the dashboard token the VM.Backup permission.':'No archives on the backup storages.');
+  renderUpload();
+}
+function renderUpload(){
+  const U=bk&&bk.upload,st=uploadState();
+  if(!U){$('bk-upload').innerHTML=`<div class="empty">No report from the upload job yet. The dashboard cannot see your upload job (rclone, rsync, ...), so the job reports itself when it finishes. Set it up with report_upload_job.py (see its header and the README); after that a failed or missing upload shows here.</div>`;return}
+  $('bk-upload').innerHTML=`${U.age>UPLOAD_STALE?`<div class="warn">No report for ${dur(U.age)}. The daily upload may have stopped (expired credentials?). Check the job's log on the backup host.</div>`:''}
+    <dl class="kv"><div><dt>Result</dt><dd>${badge(st.cls,st.label)}</dd></div><div><dt>Finished</dt><dd>${U.finished?when(U.finished):'-'} <span class="mut">${ago(U.age)}</span></dd></div>
+    <div><dt>Duration</dt><dd>${U.started&&U.finished?dur(U.finished-U.started):'-'}</dd></div>
+    <div><dt>Uploaded</dt><dd>${U.files?U.files+' files · ':''}${U.bytes?size(U.bytes):'-'}</dd></div></dl>
+    ${U.error?`<div class="warn">${esc(U.error)}</div>`:''}${(U.log||[]).length?`<pre class="log">${esc(U.log.join('\n'))}</pre>`:''}`;
+}
+function renderBkMini(){
+  if(!bk)return;const u=uploadState(),run=bk.running||[],gs=(bk.guests||[]).filter(g=>g.schedule);
+  $('bkmini').innerHTML=(bk.error?none(esc(bk.error)):gs.length?tbl(['Guest','Last backup','Result'],gs.map(g=>`<tr><td><b>${esc(gname(g))}</b></td>
+    <td class="mono mut">${g.last?ago(Math.round(bk.now-g.last.start)):'-'}</td><td>${guestResult(g,run)}</td></tr>`)):none('No backup jobs found.'))+
+    `<div class="sr"><div class="sl"><span>Offsite upload</span><span>${badge(u.cls,u.label)} <span class="mut">${esc(u.sub)}</span></span></div></div>`;
+}
+
+// ---------- sidebar routing: each page shows a subset of the blocks ----------
+const VIEWS={overview:['stats','range','usage','vms-card','hostvms','agents-card','storage-card','bk-mini','tasks-card'],
+ backups:['backups-view'],
+ node:['range','summary','vms-card','storage-card','net-card','disks-card','tasks-card'],vm:['range','summary','conf-card','snap-card','tasks-card'],
+ 'hs-agents':['agsum','agents-card','events-card'],'mac-vms':['machost','machart','hostvms'],'mac-agents':['agsum','agents-card','events-card']};
+const VTITLE={overview:'Overview',backups:'Homeserver · Backups','hs-agents':'Homeserver · Agents','mac-vms':'My Mac · VMs','mac-agents':'My Mac · Agents'};
+const LEFT=['vms-card','machost','machart','hostvms'],RIGHT=['agsum','agents-card','events-card'],EXTRA=['storage-card','net-card','disks-card','conf-card','snap-card','bk-mini'];
+function markNav(){const h=location.hash.slice(1)||'overview';
+  document.querySelectorAll('aside nav a[href^="#"]').forEach(a=>a.getAttribute('href')==='#'+h?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'))}
+function route(){
+  const h=location.hash.slice(1),m=h.match(/^vm\/(qemu|lxc)\/(\d+)$/);
+  view=m?'vm':VIEWS[h]?h:'overview';if(m)selVm=m[1]+'/'+m[2];
+  const on=VIEWS[view];
+  new Set(Object.values(VIEWS).flat()).forEach(id=>$(id).hidden=!on.includes(id));
+  const l=LEFT.some(id=>on.includes(id)),r=RIGHT.some(id=>on.includes(id));
+  $('leftcol').hidden=!l;$('rightcol').hidden=!r;$('cols').hidden=!l&&!r;$('extra').hidden=!EXTRA.some(id=>on.includes(id));
+  $('cols').classList.toggle('single',l!==r);$('rightcol').classList.toggle('agview',!!hostOf(view));
+  vinfo=null;vdetail=null;macSig='';render();renderVmDetail();renderNodeDetail();pullCharts();pullTasks();pullDetail();pullBackups();
+}
+$('tfsel').onchange=e=>{tf=e.target.value;pullCharts()};
+document.querySelectorAll('[data-cf]').forEach(b=>b.onclick=()=>{cf=b.dataset.cf;document.querySelectorAll('[data-cf]').forEach(x=>x.setAttribute('aria-pressed',x===b));pullCharts()});
+addEventListener('hashchange',route);
+route();pull();setInterval(pull,5000);setInterval(()=>{pullCharts();pullTasks();pullDetail();pullBackups()},30000);
+</script>
+</body>
+</html>
