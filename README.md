@@ -26,7 +26,7 @@ pveum acl modify / --roles PVEAuditor --users dashboard@pve --tokens 'dashboard@
 ```
 
 ```sh
-export PVE_HOST=pve.example.lan PVE_TOKEN='dashboard@pve!dash=<secret>' AGENT_KEY=$(openssl rand -hex 16)
+export PVE_HOST=pve.example.lan PVE_TOKEN='dashboard@pve!dash=<secret>' AGENT_KEY=$(openssl rand -hex 16) BACKUP_KEY=$(openssl rand -hex 16)
 export PVE_TLS_VERIFY=0      # only if Proxmox uses its self-signed certificate; see Security
 python3 server.py
 ```
@@ -40,7 +40,8 @@ Notes on the token: a privilege-separated token only gets what both the user and
 | `PVE_HOST`, `PVE_TOKEN` | Proxmox address and token. Without them the Proxmox pages stay empty |
 | `PVE_CA_FILE` | Trust your own CA for the Proxmox certificate (preferred) |
 | `PVE_TLS_VERIFY=0` | Accept a self-signed Proxmox certificate. Default: verify |
-| `AGENT_KEY` | Shared secret for every POST (agents, reporters). **Required** for POSTs |
+| `AGENT_KEY` | Secret that agents and machine reporters send (`/api/agent`, `/api/vms`). **Required** for those POSTs |
+| `BACKUP_KEY` | A *different* secret, known only to the backup-upload job (`/api/backup`). **Required** for that POST. Keeping it apart means a hijacked agent cannot report a fake "upload ok" |
 | `ALLOW_ANON_POST=1` | Accept POSTs without a key. Only for a closed test network |
 | `BIND` / `PORT` | Listen address (default `127.0.0.1`) and port (default `8080`) |
 | `PVE_URL`, `OPNSENSE_URL` | Sidebar links to the web UIs. A link shows only when its address is known |
@@ -56,7 +57,7 @@ curl -s -XPOST http://dashboard.example:8080/api/agent -H "X-Key: $AGENT_KEY" \
 
 `status` is free text; `working`, `idle` and `offline` get their own colours. `host` groups agents; the sidebar pages expect `Homeserver` and `My Mac`, other values appear under Overview.
 
-Other machines push their load, memory and disk with `report_mac.py` (macOS; run it every minute from launchd or cron), which feeds the "My Mac · System" page. `report_upload_job.py` reports the result of an offsite-upload job (rclone, rsync, ...) from its systemd unit; read the header of each script.
+Other machines push their load, memory and disk with `report_mac.py` (macOS; run it every minute from launchd or cron), which feeds the "My Mac · System" page. `report_antigravity.py` lists the Antigravity agent on the Mac as working, idle or offline (run it every 30 seconds; it sends only the status and the working folder's name). `report_upload_job.py` reports the result of an offsite-upload job (rclone, rsync, ...) from its systemd unit; read the header of each script. The upload job uses `BACKUP_KEY`, everything else `AGENT_KEY`.
 
 ## Running it as a service
 
@@ -83,7 +84,7 @@ WantedBy=multi-user.target
 ## Security
 
 - **There is no login for reading.** Anyone who can reach the port sees your VMs, storage, tasks and agents. The server listens on `127.0.0.1` by default. To serve other machines, set `BIND` deliberately and put it behind a reverse proxy with authentication and TLS, or keep it on a trusted network.
-- **The shared key travels in a header.** Over plain HTTP it can be read on the network. Use HTTPS (through the proxy) when the path is not trusted.
+- **The keys travel in a header.** Over plain HTTP it can be read on the network. Use HTTPS (through the proxy) when the path is not trusted.
 - **Use a read-only token** (`PVEAuditor`) and keep it in an environment file outside the repository. Never commit `.env`; `.gitignore` already excludes it.
 - **Verify the Proxmox certificate** (`PVE_CA_FILE`). `PVE_TLS_VERIFY=0` removes the protection against someone impersonating Proxmox, so it belongs on a trusted LAN only.
 - The dashboard only reads from Proxmox. It never starts, stops or changes anything.

@@ -5,7 +5,7 @@ from http.server import ThreadingHTTPServer
 
 def start(**env):
     """Import a fresh copy of server.py with the given environment and serve it on a free loopback port."""
-    for k in ("AGENT_KEY", "ALLOW_ANON_POST", "PVE_HOST", "PVE_TOKEN", "BIND", "PVE_TLS_VERIFY"):
+    for k in ("AGENT_KEY", "BACKUP_KEY", "ALLOW_ANON_POST", "PVE_HOST", "PVE_TOKEN", "BIND", "PVE_TLS_VERIFY"):
         os.environ.pop(k, None)
     os.environ.update(env)
     import server
@@ -51,6 +51,20 @@ class Access(unittest.TestCase):
         self.assertEqual(call(base + "/api/vms", {"host": "My Mac", "items": [], "stats": stats}, key="k")[0], 200)
         host = call(base + "/api/status")[2]["hostvms"][0]
         self.assertEqual((host["items"], len(host["hist"]), host["hist"][0]["mem"]), ([], 1, .5))
+        stop(h)
+
+    def test_agent_key_cannot_fake_a_backup_report(self):
+        _, h, base = start(AGENT_KEY="a", BACKUP_KEY="b")
+        self.assertEqual(call(base + "/api/backup", {"status": "ok"}, key="a")[0], 403)  # an agent must not be able to do this
+        self.assertEqual(call(base + "/api/agent", {"name": "x"}, key="b")[0], 403)      # and the backup key is no agent key
+        self.assertEqual(call(base + "/api/backup", {"status": "failed"}, key="b")[0], 200)
+        self.assertEqual(call(base + "/api/agent", {"name": "x"}, key="a")[0], 200)
+        self.assertEqual(call(base + "/api/backups")[2]["upload"]["status"], "failed")
+        stop(h)
+
+    def test_backup_endpoint_needs_its_own_key_to_be_set(self):
+        _, h, base = start(AGENT_KEY="a")  # BACKUP_KEY not configured
+        self.assertEqual(call(base + "/api/backup", {"status": "ok"}, key="a")[0], 403)
         stop(h)
 
     def test_anonymous_post_only_when_explicitly_allowed(self):

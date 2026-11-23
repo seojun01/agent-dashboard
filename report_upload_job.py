@@ -5,7 +5,7 @@ Run it as the last step of that service. Add one line to the [Service] section o
 
     ExecStopPost=/usr/local/sbin/report_upload_job.py
     Environment=UPLOAD_UNIT=my-upload.service DASH_URL=http://dashboard.example:8080
-    EnvironmentFile=/etc/report_upload_job.env      # contains: AGENT_KEY=<shared key>, mode 600
+    EnvironmentFile=/etc/report_upload_job.env      # contains: BACKUP_KEY=<the dashboard's BACKUP_KEY>, mode 600
 
 systemd gives ExecStopPost the result of the main command in $SERVICE_RESULT ("success" when it worked).
 If the job stops running altogether, the dashboard turns the card red after 26 hours without a report.
@@ -34,5 +34,5 @@ log = [l for l in sh("journalctl", "-u", UNIT, "-n", "15", "--no-pager", "-o", "
 body = {"status": "ok" if ok else "failed", "started": epoch("ExecMainStartTimestamp"), "finished": int(time.time()),
         "error": "" if ok else f"{os.environ.get('SERVICE_RESULT')} (exit {os.environ.get('EXIT_STATUS', '?')})", "log": log}
 req = urllib.request.Request(os.environ.get("DASH_URL", "http://127.0.0.1:8080") + "/api/backup",
-                             json.dumps(body).encode(), {"X-Key": os.environ.get("AGENT_KEY", "")})
+                             json.dumps(body).encode(), {"X-Key": os.environ.get("BACKUP_KEY", "")})
 print(urllib.request.urlopen(req, timeout=10).read().decode())

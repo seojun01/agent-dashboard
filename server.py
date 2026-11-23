@@ -4,8 +4,10 @@
 env (all optional, see README):
   PVE_HOST, PVE_TOKEN       Proxmox host and API token ("user@realm!tokenid=secret"); without them the Proxmox pages stay empty
   PVE_TLS_VERIFY=0          accept a self-signed Proxmox certificate (default: verify). PVE_CA_FILE trusts your own CA instead
-  AGENT_KEY                 shared secret the agents/reporters send as X-Key; required for every POST endpoint
-  ALLOW_ANON_POST=1         accept POSTs without a key (only for a closed test network)
+  AGENT_KEY                 shared secret agents and machine reporters send as X-Key (POST /api/agent, /api/vms)
+  BACKUP_KEY                a different secret only the backup-upload job knows (POST /api/backup), so a compromised
+                            agent cannot fake a successful backup
+  ALLOW_ANON_POST=1         accept POSTs without a key (only for a closed test network); a POST is refused when its key is unset
   BIND (127.0.0.1), PORT (8080)
   PVE_URL, OPNSENSE_URL     sidebar links to the web UIs; a link only shows if its address is known
 """
@@ -16,6 +18,7 @@ from urllib.parse import parse_qs, quote
 
 PVE_HOST, PVE_TOKEN = os.environ.get("PVE_HOST"), os.environ.get("PVE_TOKEN")
 AGENT_KEY = os.environ.get("AGENT_KEY") or None
+BACKUP_KEY = os.environ.get("BACKUP_KEY") or None
 ALLOW_ANON_POST = os.environ.get("ALLOW_ANON_POST") == "1"
 BIND = os.environ.get("BIND", "127.0.0.1")  # loopback by default; set BIND=0.0.0.0 to serve other machines
 STALE = 300  # seconds without heartbeat -> shown as "offline"
@@ -453,10 +456,12 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def _authorized(self):
-        """POSTs need the shared key; without a configured key they are refused unless ALLOW_ANON_POST=1."""
-        if not AGENT_KEY:
+        """Each POST needs its own key (backup reports: BACKUP_KEY, everything else: AGENT_KEY).
+        A key that is not configured refuses the endpoint unless ALLOW_ANON_POST=1."""
+        key = BACKUP_KEY if self.path == "/api/backup" else AGENT_KEY
+        if not key:
             return ALLOW_ANON_POST
-        return hmac.compare_digest(self.headers.get("X-Key", "").encode(), AGENT_KEY.encode())  # constant-time
+        return hmac.compare_digest(self.headers.get("X-Key", "").encode(), key.encode())  # constant-time
 
     def do_GET(self):
         self.path, _, qs = self.path.partition("?")
@@ -491,7 +496,7 @@ class H(BaseHTTPRequestHandler):
         if self.path not in ("/api/agent", "/api/vms", "/api/backup"):
             return self.send_error(404)
         if not self._authorized():
-            return self._json({"error": "forbidden: send the shared key as X-Key (the server needs AGENT_KEY set)"}, 403)
+            return self._json({"error": "forbidden: send the matching key as X-Key (AGENT_KEY, or BACKUP_KEY for /api/backup)"}, 403)
         now = time.time()
         try:
             d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 16384)))
@@ -533,7 +538,8 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    if not AGENT_KEY and not ALLOW_ANON_POST:
-        print("note: AGENT_KEY is not set, so agents and reporters cannot post. Set AGENT_KEY (see README).")
+    for name, key in (("AGENT_KEY", AGENT_KEY), ("BACKUP_KEY", BACKUP_KEY)):
+        if not key and not ALLOW_ANON_POST:
+            print(f"note: {name} is not set, so the matching reports are refused (see README).")
     print(f"dashboard on {BIND}:{port}")
     ThreadingHTTPServer((BIND, port), H).serve_forever()
