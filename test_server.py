@@ -67,6 +67,26 @@ class Access(unittest.TestCase):
         self.assertEqual(call(base + "/api/backup", {"status": "ok"}, key="a")[0], 403)
         stop(h)
 
+    def test_responses_are_compressed_only_when_the_client_asks(self):
+        import gzip
+        _, h, base = start(AGENT_KEY="k")
+        for i in range(8):  # make /api/status bigger than the 512-byte threshold below which nothing is compressed
+            call(base + "/api/agent", {"name": f"agent-{i}", "task": "x" * 200}, key="k")
+        plain = urllib.request.urlopen(base + "/api/status", timeout=5)
+        self.assertIsNone(plain.headers.get("Content-Encoding"))
+        plain_size = len(plain.read())
+        r = urllib.request.urlopen(urllib.request.Request(base + "/api/status", headers={"Accept-Encoding": "gzip"}), timeout=5)
+        body = r.read()
+        self.assertEqual(r.headers.get("Content-Encoding"), "gzip")
+        self.assertLess(len(body), plain_size / 3)
+        self.assertEqual(len(json.loads(gzip.decompress(body))["agents"]), 8)
+        small = urllib.request.urlopen(urllib.request.Request(base + "/api/graphs", headers={"Accept-Encoding": "gzip"}), timeout=5)
+        self.assertIsNone(small.headers.get("Content-Encoding"))  # tiny responses stay plain
+        page = urllib.request.urlopen(urllib.request.Request(base + "/", headers={"Accept-Encoding": "gzip"}), timeout=5)
+        self.assertEqual(page.headers.get("Content-Encoding"), "gzip")
+        self.assertIn(b"<title>", gzip.decompress(page.read()))
+        stop(h)
+
     def test_anonymous_post_only_when_explicitly_allowed(self):
         _, h, base = start(ALLOW_ANON_POST="1")
         self.assertEqual(call(base + "/api/agent", {"name": "a"})[0], 200)

@@ -585,7 +585,11 @@ function route(){
 $('tfsel').onchange=e=>{tf=e.target.value;pullCharts()};
 document.querySelectorAll('[data-cf]').forEach(b=>b.onclick=()=>{cf=b.dataset.cf;document.querySelectorAll('[data-cf]').forEach(x=>x.setAttribute('aria-pressed',x===b));pullCharts()});
 addEventListener('hashchange',route);
-route();pull();setInterval(pull,5000);setInterval(()=>{pullCharts();pullTasks();pullDetail();pullBackups()},30000);
+// refresh only while the tab is visible (an open but hidden tab costs nothing); coming back to the tab refreshes at once
+const live=f=>()=>{if(!document.hidden)f()};
+const refreshAll=()=>{pull();pullCharts();pullTasks();pullDetail();pullBackups()};
+route();pull();setInterval(live(pull),10000);setInterval(live(()=>{pullCharts();pullTasks();pullDetail();pullBackups()}),30000);
+addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAll()});
 </script>
 </body>
 </html>
