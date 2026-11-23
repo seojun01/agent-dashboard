@@ -45,6 +45,14 @@ class Access(unittest.TestCase):
         self.assertEqual(names, ["a"])
         stop(h)
 
+    def test_mac_stats_report_without_vms(self):
+        _, h, base = start(AGENT_KEY="k")
+        stats = {"cpu": .2, "mem_used": 8, "mem_total": 16, "disk_used": 1, "disk_total": 4, "uptime": 60}
+        self.assertEqual(call(base + "/api/vms", {"host": "My Mac", "items": [], "stats": stats}, key="k")[0], 200)
+        host = call(base + "/api/status")[2]["hostvms"][0]
+        self.assertEqual((host["items"], len(host["hist"]), host["hist"][0]["mem"]), ([], 1, .5))
+        stop(h)
+
     def test_anonymous_post_only_when_explicitly_allowed(self):
         _, h, base = start(ALLOW_ANON_POST="1")
         self.assertEqual(call(base + "/api/agent", {"name": "a"})[0], 200)

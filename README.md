@@ -1,6 +1,6 @@
 # agent-dashboard
 
-A small dashboard for a home lab: the state of your **Proxmox** VMs and containers, the status of the **agents** working for you (scripts, bots, coding assistants), the **backup** pipeline, and the VMs/stats of other machines such as a laptop. One Python file with no dependencies, one HTML page.
+A small dashboard for a home lab: the state of your **Proxmox** VMs and containers, the status of the **agents** working for you (scripts, bots, coding assistants), the **backup** pipeline, and the load, memory and disk of other machines such as a laptop. One Python file with no dependencies, one HTML page.
 
 - **Overview**: host CPU/memory/disk, usage charts, VMs, agents, storage, latest backups and tasks
 - **Node and VM/CT pages** in the layout of the Proxmox web UI: status panel, area charts (hour/day/week/month, average/maximum), hardware, snapshots, tasks
@@ -56,7 +56,7 @@ curl -s -XPOST http://dashboard.example:8080/api/agent -H "X-Key: $AGENT_KEY" \
 
 `status` is free text; `working`, `idle` and `offline` get their own colours. `host` groups agents; the sidebar pages expect `Homeserver` and `My Mac`, other values appear under Overview.
 
-Other machines push their VMs and stats with `report_utm.py` (macOS and [UTM](https://mac.getutm.app); run it every minute from launchd or cron). `report_upload_job.py` reports the result of an offsite-upload job (rclone, rsync, ...) from its systemd unit; read the header of each script.
+Other machines push their load, memory and disk with `report_mac.py` (macOS; run it every minute from launchd or cron), which feeds the "My Mac · System" page. `report_upload_job.py` reports the result of an offsite-upload job (rclone, rsync, ...) from its systemd unit; read the header of each script.
 
 ## Running it as a service
 
@@ -95,3 +95,7 @@ python3 -m unittest test_server -v
 ```
 
 They check the access rules: POSTs are refused without the key, the safe defaults, and that VM ids are validated before they reach Proxmox.
+
+## License
+
+[MIT](LICENSE): use it, change it, share it, including commercially. The only condition is keeping the copyright notice and license text with copies of the code.

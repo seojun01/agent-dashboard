@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Agent dashboard: Proxmox VMs + agent heartbeats + VMs/stats pushed by other machines. stdlib only.
+"""Agent dashboard: Proxmox VMs + agent heartbeats + machine stats pushed by other hosts. stdlib only.
 
 env (all optional, see README):
   PVE_HOST, PVE_TOKEN       Proxmox host and API token ("user@realm!tokenid=secret"); without them the Proxmox pages stay empty
@@ -495,7 +495,7 @@ class H(BaseHTTPRequestHandler):
         now = time.time()
         try:
             d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 16384)))
-            if self.path == "/api/vms":  # VMs + machine stats of another host (e.g. the Mac), pushed by report_utm.py
+            if self.path == "/api/vms":  # machine stats of another host (e.g. the Mac), pushed by report_mac.py
                 host = str(d["host"])[:32]
                 st = d.get("stats") or {}
                 hostvms[host] = {"host": host, "seen": now, "items": [

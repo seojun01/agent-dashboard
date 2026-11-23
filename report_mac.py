@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Report this Mac's UTM VMs and machine stats to the dashboard. Run it on the Mac, e.g. every minute via launchd/cron.
+"""Report this Mac's load, memory, disk and uptime to the dashboard. Run it every minute from launchd or cron.
 
-usage: DASH_URL=http://dashboard.example:8080 AGENT_KEY=<shared key> python3 report_utm.py [host-label]
+usage: DASH_URL=http://dashboard.example:8080 AGENT_KEY=<shared key> python3 report_mac.py [host-label]
+The dashboard keeps the last ~4 hours of reports and charts them on the "My Mac · System" page.
 """
 import json, os, re, shutil, subprocess, sys, time, urllib.request
 
-UTMCTL = "/Applications/UTM.app/Contents/MacOS/utmctl"
 host = sys.argv[1] if len(sys.argv) > 1 else "My Mac"
 
 
@@ -25,15 +25,8 @@ def stats():
             "disk_used": du.used, "disk_total": du.total, "uptime": time.time() - boot}
 
 
-# lines: "<uuid> <status> <name with spaces>", first line is the header
-items = [{"name": p[2], "status": p[1]} for p in (l.split(None, 2) for l in run(UTMCTL, "list").splitlines()[1:]) if len(p) == 3]
-try:
-    st = stats()
-except Exception as e:  # still report the VM list if a stat command fails
-    print("stats skipped:", e, file=sys.stderr)
-    st = {}
 req = urllib.request.Request(
     os.environ.get("DASH_URL", "http://127.0.0.1:8080") + "/api/vms",
-    json.dumps({"host": host, "items": items, "stats": st}).encode(),
+    json.dumps({"host": host, "items": [], "stats": stats()}).encode(),  # "items" (VMs) stays empty: only the machine is reported
     {"X-Key": os.environ.get("AGENT_KEY", "")})
 print(urllib.request.urlopen(req, timeout=10).read().decode())

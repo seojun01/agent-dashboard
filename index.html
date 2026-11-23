@@ -43,7 +43,7 @@ main{padding:20px 24px;display:flex;flex-direction:column;gap:16px}
 svg.sp{width:100%;height:26px;margin-top:6px;display:block}
 .cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,4fr);gap:16px;align-items:start}.cols.single{grid-template-columns:1fr}
 #agents th,#agents td{padding-left:12px;padding-right:12px}
-#leftcol,#rightcol,#machost,#hostvms{display:flex;flex-direction:column;gap:16px;min-width:0}
+#leftcol,#rightcol,#machost{display:flex;flex-direction:column;gap:16px;min-width:0}
 #rightcol.agview{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);align-items:start}#rightcol.agview #agsum{grid-column:1/-1}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-weight:500;color:var(--mut);font-size:12px;padding:8px 16px;white-space:nowrap}
@@ -115,7 +115,7 @@ pre.log{margin:0;padding:10px 16px;border-top:1px solid var(--line);font:12px/1.
     <a href="#hs-agents">Agents</a>
     <span id="ext"></span>
     <div class="sg">My Mac</div>
-    <a href="#mac-vms">VMs (UTM)</a>
+    <a href="#mac-system">System</a>
     <a href="#mac-agents">Agents</a>
   </nav>
 </aside>
@@ -144,7 +144,6 @@ pre.log{margin:0;padding:10px 16px;border-top:1px solid var(--line);font:12px/1.
       <section class="card" id="vms-card"><h2>Homeserver VMs and containers <span class="mut" id="vmhint"></span></h2><div class="scroll" id="vms"></div></section>
       <div id="machost"></div>
       <div id="machart" class="charts" style="grid-template-columns:repeat(2,1fr)"></div>
-      <div id="hostvms"></div>
     </div>
     <div id="rightcol">
       <section class="tiles" id="agsum"></section>
@@ -200,7 +199,7 @@ function fake(){return{links:[{name:'Proxmox',url:'#'},{name:'OPNsense',url:'#'}
  {type:'qemu',vmid:101,name:'homeassistant',node:'pve',status:'running',cpu:rnd()*.1,mem:2e9,maxmem:4*2**30,uptime:86400*40,maxcpu:2,maxdisk:32e9,netin:2e9,netout:8e8},
  {type:'qemu',vmid:103,name:'agent-vm',node:'pve',status:'running',cpu:.3+rnd()*.3,mem:3e9,maxmem:3.5*2**30,uptime:7200,maxcpu:2,maxdisk:32e9,netin:1e9,netout:4e8},
  {type:'qemu',vmid:104,name:'build-runner',node:'pve',status:'stopped',maxcpu:2,maxdisk:64e9}]},
- hostvms:[{host:'My Mac',age:20,items:[{name:'Windows',status:'stopped'},{name:'Ubuntu Dev',status:'started'}],
+ hostvms:[{host:'My Mac',age:20,items:[],
   stats:{cpu:.15,mem_used:17e9,mem_total:25.7e9,disk_used:291e9,disk_total:494e9,uptime:86400*3}}],
  agents:[{name:'news-agent',host:'Homeserver',status:'working',task:'Morning briefing',age:12,since_age:340,beats:420},
  {name:'mac-agent',host:'My Mac',status:'working',task:'Building the dashboard',age:40,since_age:1900,beats:1210},
@@ -411,7 +410,7 @@ const MACCHARTS=[{title:'Load per core (1m)',series:[{key:'cpu',label:'Load',col
 function renderMacCharts(){
   const h=(data.hostvms||[])[0],pts=(h&&h.hist)||[],sig=pts.length+':'+(pts.length?pts[pts.length-1].t:'');
   if(sig===macSig)return;macSig=sig;  // charts only redraw when a new sample arrived, so a hover tooltip survives the 5 s refresh
-  if(pts.length<2)$('machart').innerHTML=`<div class="card empty" style="grid-column:1/-1">History appears after a few reports. Run report_utm.py every minute to chart load and memory.</div>`;
+  if(pts.length<2)$('machart').innerHTML=`<div class="card empty" style="grid-column:1/-1">History appears after a few reports. Run report_mac.py every minute to chart load and memory.</div>`;
   else drawGrid($('machart'),MACCHARTS,pts,'mc','');
 }
 const TLW=21600;  // the agent timeline strip covers the last 6 hours
@@ -477,10 +476,8 @@ function renderMac(){
     <div><dt>Load per core (1m)</dt><dd>${pct(s.cpu)}%${barx(s.cpu)}</dd></div>
     <div><dt>Memory</dt><dd>${gb(s.mem_used)} / ${gb(s.mem_total)} GiB${barx(s.mem_used/s.mem_total)}</dd></div>
     <div><dt>Disk</dt><dd>${gb(s.disk_used)} / ${gb(s.disk_total)} GiB${barx(s.disk_used/s.disk_total)}</dd></div>
-    <div><dt>Uptime</dt><dd>${dur(Math.round(s.uptime||0))}</dd></div></dl>`:'<div class="empty">No machine stats reported yet. Run report_utm.py on the Mac.</div>'}</section>`}).join('')
-    ||'<section class="card"><h2>My Mac</h2><div class="empty">Nothing reported yet. Run report_utm.py on the Mac.</div></section>';
-  $('hostvms').innerHTML=hv.map(h=>`<section class="card"><h2>${esc(h.host)} VMs (UTM)</h2>
-    ${h.items.length?`<table><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>${h.items.map(i=>`<tr><td><b>${esc(i.name)}</b></td><td>${badge(i.status==='started'||i.status==='running'?'ok':'',esc(i.status))}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No VMs.</div>'}</section>`).join('');
+    <div><dt>Uptime</dt><dd>${dur(Math.round(s.uptime||0))}</dd></div></dl>`:'<div class="empty">No machine stats reported yet. Run report_mac.py on the Mac.</div>'}</section>`}).join('')
+    ||'<section class="card"><h2>My Mac</h2><div class="empty">Nothing reported yet. Run report_mac.py on the Mac.</div></section>';
 }
 function renderAgents(all){
   const hs=hostOf(view),av=all.filter(x=>!hs||slug(x.host)===hs),n=s=>av.filter(x=>x.status===s).length;
@@ -567,12 +564,12 @@ function renderBkMini(){
 }
 
 // ---------- sidebar routing: each page shows a subset of the blocks ----------
-const VIEWS={overview:['stats','range','usage','vms-card','hostvms','agents-card','storage-card','bk-mini','tasks-card'],
+const VIEWS={overview:['stats','range','usage','vms-card','agents-card','storage-card','bk-mini','tasks-card'],
  backups:['backups-view'],
  node:['range','summary','vms-card','storage-card','net-card','disks-card','tasks-card'],vm:['range','summary','conf-card','snap-card','tasks-card'],
- 'hs-agents':['agsum','agents-card','events-card'],'mac-vms':['machost','machart','hostvms'],'mac-agents':['agsum','agents-card','events-card']};
-const VTITLE={overview:'Overview',backups:'Homeserver · Backups','hs-agents':'Homeserver · Agents','mac-vms':'My Mac · VMs','mac-agents':'My Mac · Agents'};
-const LEFT=['vms-card','machost','machart','hostvms'],RIGHT=['agsum','agents-card','events-card'],EXTRA=['storage-card','net-card','disks-card','conf-card','snap-card','bk-mini'];
+ 'hs-agents':['agsum','agents-card','events-card'],'mac-system':['machost','machart'],'mac-agents':['agsum','agents-card','events-card']};
+const VTITLE={overview:'Overview',backups:'Homeserver · Backups','hs-agents':'Homeserver · Agents','mac-system':'My Mac · System','mac-agents':'My Mac · Agents'};
+const LEFT=['vms-card','machost','machart'],RIGHT=['agsum','agents-card','events-card'],EXTRA=['storage-card','net-card','disks-card','conf-card','snap-card','bk-mini'];
 function markNav(){const h=location.hash.slice(1)||'overview';
   document.querySelectorAll('aside nav a[href^="#"]').forEach(a=>a.getAttribute('href')==='#'+h?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'))}
 function route(){
